@@ -7,16 +7,26 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,11 +41,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -57,6 +71,20 @@ import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+val topGradient = Brush.verticalGradient(
+    0f to Color.Black.copy(alpha = 0.92f),
+    0.35f to Color.Black.copy(alpha = 0.70f),
+    0.70f to Color.Black.copy(alpha = 0.35f),
+    1f to Color.Transparent
+)
+
+val bottomGradient = Brush.verticalGradient(
+    0f to Color.Transparent,
+    0.35f to Color.Black.copy(alpha = 0.35f),
+    0.70f to Color.Black.copy(alpha = 0.75f),
+    1f to Color.Black.copy(alpha = 0.92f)
+)
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -175,182 +203,224 @@ fun VideoPlayerScreen(
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            BottomOverlayControlsTv(
+            KodiOverlayControlsTv(
                 player = player,
                 channelName = channelName,
                 nowEvent = nowEvent,
                 nextEvent = nextEvent,
                 nowSec = nowSec,
+                controlsVisible = controlsVisible,   // ✅ přidáno
                 onBack = onClose,
-                onUserInteraction = { interactionToken++ },
-                clearFocusToken = clearFocusToken
+                onUserInteraction = { interactionToken++ }
             )
         }
     }
 }
-
 @Composable
-private fun BottomOverlayControlsTv(
+private fun KodiOverlayControlsTv(
     player: Player,
     channelName: String,
     nowEvent: EpgEventEntry?,
     nextEvent: EpgEventEntry?,
     nowSec: Long,
+    controlsVisible: Boolean,
     onBack: () -> Unit,
-    onUserInteraction: () -> Unit,
-    clearFocusToken: Int
+    onUserInteraction: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
-    val firstButtonRequester = remember { FocusRequester() }
-
     var showAudio by remember { mutableStateOf(false) }
     var showSubs by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        firstButtonRequester.requestFocus()
-        onUserInteraction()
+    // poslední focus v overlay (0=stop, 1=audio, 2=subs)
+    var lastFocused by rememberSaveable { mutableIntStateOf(0) }
+
+    val stopFR = remember { FocusRequester() }
+    val audioFR = remember { FocusRequester() }
+    val subsFR  = remember { FocusRequester() }
+    val focusRequesters = remember { listOf(stopFR, audioFR, subsFR) }
+
+    // když se overlay znovu ukáže, vrať fokus tam, kde byl
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            focusRequesters.getOrNull(lastFocused)?.requestFocus()
+        }
     }
 
-    LaunchedEffect(clearFocusToken) {
-        focusManager.clearFocus(force = true)
-    }
-
-    // hodiny vpravo
     val clock = remember(nowSec) { formatClock(nowSec) }
-
-    // progress a texty
+    val endsAt = remember(nowEvent) { nowEvent?.let { formatClock(it.stop) } ?: "" }
     val progress = remember(nowEvent, nowSec) { nowEvent?.progress(nowSec) ?: 0f }
-    val nowTimeRange = remember(nowEvent) { nowEvent?.timeRangeText() }
-    val elapsedRemaining = remember(nowEvent, nowSec) { nowEvent?.elapsedRemainingText(nowSec) }
 
-    Surface(
-        tonalElevation = 0.dp,
-        shadowElevation = 6.dp,
-        color = Color.Black.copy(alpha = 0.45f), // ✅ průhledné "glass"
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            Modifier
+    val centerTimeText = remember(nowEvent, nowSec) {
+        nowEvent?.let { event ->
+            val elapsed = (nowSec - event.start).coerceAtLeast(0L)
+            val total = (event.stop - event.start).coerceAtLeast(1L)
+            "${formatHms(elapsed)} / ${formatHms(total)}"
+        } ?: "—"
+    }
+
+    val title = remember(nowEvent, channelName) { nowEvent?.title ?: channelName }
+    val summary = remember(nowEvent) { nowEvent?.summary?.trim().orEmpty() }
+
+    Box(Modifier.fillMaxSize()) {
+
+        // ===== TOP gradient =====
+        Box(
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .align(Alignment.TopCenter)
+                .background(topGradient)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
-            // Header row: channel + clock
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Text(
-                    channelName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    color = Color.White,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    clock,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            // NOW block
-            if (nowEvent != null) {
-                Text(
-                    nowEvent.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    color = Color.White,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        nowTimeRange ?: "",
+                        text = title,
                         color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        elapsedRemaining ?: "",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-
-                LinearProgressIndicator(
-                    progress = { progress },
-                    color = Color.White,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                )
-
-                if (!nowEvent.summary.isNullOrBlank()) {
-                    Text(
-                        nowEvent.summary!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (summary.isNotEmpty()) {
+                        Text(
+                            text = summary,
+                            color = Color.White.copy(alpha = 0.86f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            } else {
-                Text(
-                    "No EPG data",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
 
-            // NEXT (menší)
-            if (nextEvent != null) {
-                val nextRange = remember(nextEvent) { nextEvent.timeRangeText() }
-                Text(
-                    "Next: ${nextEvent.title} ${if (nextRange != null) "• $nextRange" else ""}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    color = Color.White,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(clock, color = Color.White, style = MaterialTheme.typography.titleLarge)
+                    if (endsAt.isNotEmpty()) {
+                        Text(
+                            "Končí v: $endsAt",
+                            color = Color.White.copy(alpha = 0.90f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
             }
+        }
 
-            // Buttons row (TV-friendly)
+        // ===== BOTTOM gradient =====
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(bottomGradient)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom
             ) {
-                Button(
-                    onClick = {
-                        if (player.isPlaying) player.pause() else player.play()
-                        onUserInteraction()
-                    },
+                // LEFT: Stop/Back icon button
+                RoundIconButton(
+                    icon = { Icon(Icons.Filled.Stop, contentDescription = "Stop") },
+                    onClick = { onUserInteraction(); onBack() },
+                    focusRequester = stopFR,
+                    onFocused = { lastFocused = 0 }
+                )
+
+                // CENTER: time + progress
+                Column(
                     modifier = Modifier
                         .weight(1f)
-                        .focusRequester(firstButtonRequester)
-                ) { Text(if (player.isPlaying) "Pause" else "Play") }
+                        .padding(horizontal = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = centerTimeText,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1
+                    )
 
-                Button(
-                    onClick = { showAudio = true; onUserInteraction() },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Audio") }
+                    Spacer(Modifier.height(8.dp))
 
-                Button(
-                    onClick = { showSubs = true; onUserInteraction() },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Titulky") }
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.22f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                    )
 
-                TextButton(onClick = onBack) { Text("Back") }
+                    if (nextEvent != null) {
+                        val nextRange = remember(nextEvent) { nextEvent.timeRangeText() ?: "" }
+                        Text(
+                            text = "Následuje: ${nextEvent.title}${if (nextRange.isNotEmpty()) " • $nextRange" else ""}",
+                            color = Color.White.copy(alpha = 0.80f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                }
+
+                // RIGHT: Audio + Subs icon buttons
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    RoundIconButton(
+                        icon = { Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Audio") },
+                        onClick = { onUserInteraction(); showAudio = true },
+                        focusRequester = audioFR,
+                        onFocused = { lastFocused = 1 }
+                    )
+                    RoundIconButton(
+                        icon = { Icon(Icons.Filled.Subtitles, contentDescription = "Subtitles") },
+                        onClick = { onUserInteraction(); showSubs = true },
+                        focusRequester = subsFR,
+                        onFocused = { lastFocused = 2 }
+                    )
+                }
             }
         }
     }
 
     if (showAudio) AudioTrackDialog(player = player, onDismiss = { showAudio = false })
     if (showSubs) SubtitleTrackDialog(player = player, onDismiss = { showSubs = false })
+}
+
+@Composable
+private fun RoundIconButton(
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester,
+    onFocused: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+
+    val bg = if (focused) {
+        Color.White.copy(alpha = 0.26f)   // fokus výraznější, ale decentní
+    } else {
+        Color.White.copy(alpha = 0.14f)
+    }
+
+    Surface(
+        color = Color.Transparent,
+        contentColor = Color.White,
+        modifier = Modifier
+            .size(46.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { st ->
+                focused = st.isFocused
+                if (st.isFocused) onFocused()
+            }
+            .clip(CircleShape)
+            .background(bg)
+            .clickable { onClick() }
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            icon()
+        }
+    }
 }
 
 @Composable
@@ -424,4 +494,12 @@ private val clockFormatter: DateTimeFormatter =
 private fun formatClock(epochSec: Long): String {
     val z = ZoneId.systemDefault()
     return Instant.ofEpochSecond(epochSec).atZone(z).format(clockFormatter)
+}
+
+private fun formatHms(sec: Long): String {
+    val s = sec.coerceAtLeast(0L)
+    val h = (s / 3600).toInt()
+    val m = ((s % 3600) / 60).toInt()
+    val ss = (s % 60).toInt()
+    return if (h > 0) "%d:%02d:%02d".format(h, m, ss) else "%02d:%02d".format(m, ss)
 }

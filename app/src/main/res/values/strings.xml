@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">TVHStream</string>
+
+    <string name="channel_list">Channel List</string>
 </resources>

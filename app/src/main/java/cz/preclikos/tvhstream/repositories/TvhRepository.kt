@@ -5,23 +5,19 @@ import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.htsp.HtspEvent
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
-import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.withTimeout
 
 class TvhRepository(
     private val htsp: HtspService,
@@ -29,16 +25,10 @@ class TvhRepository(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
-    private var epgBackfillJob: Job? = null
-    private val ingestMutex = Mutex()
-
     // ===== Status =====
     private val _status = MutableStateFlow("Disconnected")
     val status: StateFlow<String> = _status
-
-    fun setStatus(text: String) {
-        _status.value = text
-    }
+    fun setStatus(text: String) { _status.value = text }
 
     // ===== Channels =====
     private data class ChannelEntry(
@@ -47,18 +37,28 @@ class TvhRepository(
         val number: Int?
     )
 
-    private val channelMap = linkedMapOf<Int, ChannelEntry>() // key = channelId
+    private val channelMap = linkedMapOf<Int, ChannelEntry>()
     private val _channelsUi = MutableStateFlow<List<ChannelUi>>(emptyList())
     val channelsUi: StateFlow<List<ChannelUi>> = _channelsUi
 
+    // Barrier: repo-level jistota, že kanály jsou opravdu zpracované
+    private var channelsReadyDef = CompletableDeferred<Unit>()
+
     // ===== EPG =====
     private val epgByChannel = mutableMapOf<Int, MutableStateFlow<List<EpgEventEntry>>>()
-
     fun epgForChannel(channelId: Int): StateFlow<List<EpgEventEntry>> =
         epgByChannel.getOrPut(channelId) { MutableStateFlow(emptyList()) }
 
-    @Volatile
-    private var started = false
+    private enum class EpgSnapshotState { NOT_LOADED, LOADED }
+    private val epgSnapshotState = mutableMapOf<Int, EpgSnapshotState>()
+    private val epgSnapshotInFlight = mutableSetOf<Int>()
+
+    // Jeden mutex na všechny “mutable state” operace (channels + epg ingest + snapshot tracking)
+    private val stateMutex = Mutex()
+
+    private var epgBackfillJob: Job? = null
+
+    @Volatile private var started = false
 
     fun startIfNeeded() {
         if (started) return
@@ -69,7 +69,7 @@ class TvhRepository(
                 when (e) {
                     is HtspEvent.ServerMessage -> handleServerMessage(e.msg)
                     is HtspEvent.ConnectionError -> {
-                        stopEpgBackfillWorker()
+                        stopEpgSnapshotWorker()
                         setStatus("Error: ${e.error.message ?: e.error}")
                     }
                 }
@@ -78,41 +78,109 @@ class TvhRepository(
     }
 
     /**
-     * IMPORTANT:
-     * getChannels reply jde přes seq -> pending, takže se typicky NEDOSTANE do events.
-     * Tohle je explicitní ingest odpovědi.
+     * Zavolej před každým novým connectem / reconnectem.
+     * Vyčistí stav a resetne barrier.
      */
-    fun ingestGetChannelsReply(reply: HtspMessage) {
-        val raw = reply.fields["channels"] ?: run {
-            setStatus("getChannels: no 'channels' field (keys=${reply.fields.keys})")
-            return
+    suspend fun onNewConnectionStarting() {
+        stateMutex.withLock {
+            channelMap.clear()
+            _channelsUi.value = emptyList()
+
+            // EPG nechávám čistě podle tvé preference:
+            // - pokud chceš při reconnectu EPG zahodit => clear i epgByChannel + snapshotState
+            epgByChannel.clear()
+            epgSnapshotState.clear()
+            epgSnapshotInFlight.clear()
+
+            channelsReadyDef = CompletableDeferred()
         }
-
-        @Suppress("UNCHECKED_CAST")
-        val list = raw as? List<Map<String, Any?>> ?: run {
-            setStatus("getChannels: 'channels' has unexpected type: ${raw::class.java}")
-            return
-        }
-
-        for (ch in list) {
-            val id = (ch["channelId"] as? Number)?.toInt() ?: continue
-            val name = ch["channelName"] as? String ?: continue
-
-            val number =
-                (ch["channelNumber"] as? Number)?.toInt()
-                    ?: (ch["number"] as? Number)?.toInt()
-                    ?: (ch["lcn"] as? Number)?.toInt()
-                    ?: (ch["channelNum"] as? Number)?.toInt()
-                    ?: (ch["channelno"] as? Number)?.toInt()
-
-            channelMap[id] = ChannelEntry(id = id, name = name, number = number)
-        }
-
-        publishChannels()
     }
 
-    private fun pickChannelsMissingEpg(limit: Int): List<Int> {
-        // vezmeme kanály v pořadí podle UI (číslo->jméno), a vybereme ty, co mají empty list
+    suspend fun awaitChannelsReady(timeoutMs: Long = 30_000) {
+        withTimeout(timeoutMs) { channelsReadyDef.await() }
+    }
+
+    // ===== EPG Snapshot worker (1× per channel) =====
+
+    fun startEpgSnapshotWorker(
+        batchSize: Int = 5,
+        intervalMs: Long = 2_000,
+        windowPastSec: Long = 2 * 3600,
+        windowFutureSec: Long = 12 * 3600
+    ) {
+        if (epgBackfillJob?.isActive == true) return
+
+        epgBackfillJob = scope.launch {
+            while (isActive) {
+                val targets = stateMutex.withLock { pickChannelsNeedingSnapshotLocked(batchSize) }
+                if (targets.isEmpty()) {
+                    delay(5_000)
+                    continue
+                }
+
+                val nowSec = System.currentTimeMillis() / 1000L
+                val fromSec = nowSec - windowPastSec
+                val toSec = nowSec + windowFutureSec
+
+                var ok = 0
+                for (chId in targets) {
+                    if (!isActive) break
+                    if (fetchEpgSnapshotOnce(chId, fromSec, toSec)) ok++
+                    delay(150) // jemné “neDDOS”
+                }
+
+                setStatus("EPG snapshot: $ok/${targets.size}")
+                delay(intervalMs)
+            }
+        }
+    }
+
+    fun stopEpgSnapshotWorker() {
+        epgBackfillJob?.cancel()
+        epgBackfillJob = null
+    }
+
+    private suspend fun fetchEpgSnapshotOnce(
+        channelId: Int,
+        fromSec: Long,
+        toSec: Long
+    ): Boolean {
+        // atomicky rozhodni: smí se snapshot udělat?
+        stateMutex.withLock {
+            val st = epgSnapshotState[channelId] ?: EpgSnapshotState.NOT_LOADED
+            if (st == EpgSnapshotState.LOADED) return false
+            if (!epgSnapshotInFlight.add(channelId)) return false
+        }
+
+        try {
+            val reply = runCatching {
+                htsp.request(
+                    method = "getEvents",
+                    fields = mapOf(
+                        "channelId" to channelId,
+                        "start" to fromSec,
+                        "stop" to toSec
+                    ),
+                    timeoutMs = 20_000
+                )
+            }.getOrNull() ?: return false
+
+            if (reply.fields.containsKey("error")) return false
+
+            // ingest + označení LOADED musí být pod zámkem
+            stateMutex.withLock {
+                ingestGetEventsReplyLocked(reply)
+                epgSnapshotState[channelId] = EpgSnapshotState.LOADED
+            }
+            return true
+        } finally {
+            stateMutex.withLock { epgSnapshotInFlight.remove(channelId) }
+        }
+    }
+
+    private fun pickChannelsNeedingSnapshotLocked(limit: Int): List<Int> {
+        if (channelMap.isEmpty()) return emptyList()
+
         val sortedIds = channelMap.values
             .sortedWith(
                 compareBy<ChannelEntry>(
@@ -126,9 +194,8 @@ class TvhRepository(
 
         val out = ArrayList<Int>(limit)
         for (id in sortedIds) {
-            val flow = epgByChannel[id]
-            val empty = flow == null || flow.value.isEmpty()
-            if (empty) {
+            val st = epgSnapshotState[id] ?: EpgSnapshotState.NOT_LOADED
+            if (st == EpgSnapshotState.NOT_LOADED && !epgSnapshotInFlight.contains(id)) {
                 out.add(id)
                 if (out.size == limit) break
             }
@@ -136,192 +203,35 @@ class TvhRepository(
         return out
     }
 
-    private suspend fun fetchEpgForChannelSafe(
-        channelId: Int,
-        fromSec: Long,
-        toSec: Long
-    ): Boolean {
-        val reply = runCatching {
-            htsp.request(
-                method = "getEvents",
-                fields = mapOf(
-                    "channelId" to channelId,
-                    "start" to fromSec,
-                    "stop" to toSec
-                ),
-                timeoutMs = 20_000
-            )
-        }.getOrNull() ?: return false
+    // ===== Server messages =====
 
-        if (reply.fields.containsKey("error")) return false
-
-        ingestMutex.withLock {
-            ingestGetEventsReply(reply)
-        }
-        return true
-    }
-
-    fun startEpgBackfillWorker(
-        batchSize: Int = 5,
-        intervalMs: Long = 2_000,
-        windowPastSec: Long = 2 * 3600,
-        windowFutureSec: Long = 12 * 3600
-    ) {
-        // už běží? nech to být
-        if (epgBackfillJob?.isActive == true) return
-
-        epgBackfillJob = scope.launch {
-            while (isActive) {
-                // nemá smysl, dokud nemáme kanály
-                if (channelMap.isEmpty()) {
-                    delay(intervalMs)
-                    continue
-                }
-
-                val nowSec = System.currentTimeMillis() / 1000L
-                val fromSec = nowSec - windowPastSec
-                val toSec = nowSec + windowFutureSec
-
-                val targets = pickChannelsMissingEpg(batchSize)
-                if (targets.isEmpty()) {
-                    // všechno má něco → zpomal
-                    delay(5_000)
-                    continue
-                }
-
-                var ok = 0
-                for (chId in targets) {
-                    if (fetchEpgForChannelSafe(chId, fromSec, toSec)) ok++
-                    // malá pauza, ať neDDOSuješ TVH
-                    delay(150)
-                }
-
-                setStatus("EPG backfill: filled $ok/${targets.size}")
-                delay(intervalMs)
-            }
-        }
-    }
-
-    fun stopEpgBackfillWorker() {
-        epgBackfillJob?.cancel()
-        epgBackfillJob = null
-    }
-
-    private fun handleServerMessage(msg: HtspMessage) {
+    private suspend fun handleServerMessage(msg: HtspMessage) {
         when (msg.method) {
-            "channelAdd", "channelUpdate" -> handleChannel(msg)
+            // Channels
+            "channelAdd", "channelUpdate" -> stateMutex.withLock { handleChannelLocked(msg) }
+            "channelDelete" -> stateMutex.withLock { handleChannelDeleteLocked(msg) }
 
-            // EPG live stream (názvy se můžou lišit dle TVH)
-            "eventAdd", "eventUpdate" -> handleEventUpsert(msg)
-            "eventDelete" -> handleEventDelete(msg)
-        }
-    }
-
-    suspend fun requestEpgForAllChannels(
-        nowSec: Long = System.currentTimeMillis() / 1000L,
-        fromSec: Long = nowSec - 2 * 3600,
-        toSec: Long = nowSec + 12 * 3600,
-        parallelism: Int = 6,
-        timeoutMs: Long = 20_000
-    ) = coroutineScope {
-        val ids = channelMap.keys.toList()
-        if (ids.isEmpty()) {
-            setStatus("EPG: no channels")
-            return@coroutineScope
-        }
-
-        val sem = Semaphore(parallelism)
-        val ingestMutex = Mutex()
-        val done = AtomicInteger(0)
-        val ok = AtomicInteger(0)
-
-        ids.map { chId ->
-            async {
-                sem.withPermit {
-                    val reply = runCatching {
-                        htsp.request(
-                            method = "getEvents",
-                            fields = mapOf(
-                                "channelId" to chId,
-                                "start" to fromSec,
-                                "stop" to toSec
-                            ),
-                            timeoutMs = timeoutMs
-                        )
-                    }.getOrNull()
-
-                    if (reply != null && !reply.fields.containsKey("error")) {
-                        // ingest musí být sériový (jinak race)
-                        ingestMutex.withLock {
-                            ingestGetEventsReply(reply)
-                        }
-                        ok.incrementAndGet()
-                    }
-
-                    val d = done.incrementAndGet()
-                    if (d % 10 == 0 || d == ids.size) {
-                        setStatus("EPG: $d/${ids.size} channels (ok=${ok.get()})")
-                    }
+            // Barrier marker (po enableAsyncMetadata)
+            "initialSyncCompleted" -> {
+                stateMutex.withLock {
+                    publishChannelsLocked()
+                    if (!channelsReadyDef.isCompleted) channelsReadyDef.complete(Unit)
                 }
             }
-        }.awaitAll()
 
-        setStatus("EPG loaded: ok=${ok.get()}/${ids.size}")
+            // EPG live stream
+            "eventAdd", "eventUpdate" -> stateMutex.withLock { handleEventUpsertLocked(msg) }
+            "eventDelete" -> stateMutex.withLock { handleEventDeleteLocked(msg) }
+        }
     }
 
-    suspend fun requestInitialEpgWindow(
-        nowSec: Long = System.currentTimeMillis() / 1000L,
-        fromSec: Long = nowSec - 2 * 3600,
-        toSec: Long = nowSec + 12 * 3600,
-        channelLimit: Int = 50
-    ) {
-        val channelIds = channelMap.values
-            .sortedWith(compareBy<ChannelEntry>(
-                { it.number == null },
-                { it.number ?: Int.MAX_VALUE },
-                { it.name.lowercase() },
-                { it.id }
-            ))
-            .take(channelLimit)
-            .map { it.id }
+    // ===== Channels handling =====
 
-        if (channelIds.isEmpty()) {
-            setStatus("EPG: no channels yet")
-            return
-        }
-
-        var ok = 0
-        for (chId in channelIds) {
-            val reply = runCatching {
-                htsp.request(
-                    method = "getEvents",
-                    fields = mapOf(
-                        "channelId" to chId,
-                        "start" to fromSec,
-                        "stop" to toSec
-                    )
-                )
-            }.getOrElse { t ->
-                // nepadat kvůli jednomu kanálu
-                setStatus("EPG failed for $chId: ${t.message ?: t}")
-                continue
-            }
-
-            ingestGetEventsReply(reply)
-            ok++
-        }
-
-        setStatus("EPG loaded for channels: $ok/${channelIds.size}")
-    }
-
-    // ===== Channels handling (async) =====
-
-    private fun handleChannel(msg: HtspMessage) {
+    private fun handleChannelLocked(msg: HtspMessage) {
         when (msg.method) {
             "channelAdd" -> {
                 val id = msg.int("channelId") ?: return
                 val name = msg.str("channelName") ?: return
-
                 val number =
                     msg.int("channelNumber")
                         ?: msg.int("number")
@@ -329,8 +239,12 @@ class TvhRepository(
                         ?: msg.int("channelNum")
                         ?: msg.int("channelno")
 
-                channelMap[id] = ChannelEntry(id = id, name = name, number = number)
-                publishChannels()
+                channelMap[id] = ChannelEntry(id, name, number)
+
+                // snapshot pro nový kanál ještě nebyl
+                if (epgSnapshotState[id] == null) epgSnapshotState[id] = EpgSnapshotState.NOT_LOADED
+
+                publishChannelsLocked()
             }
 
             "channelUpdate" -> {
@@ -347,19 +261,32 @@ class TvhRepository(
                         ?: existing.number
 
                 channelMap[id] = existing.copy(name = newName, number = newNumber)
-                publishChannels()
+                publishChannelsLocked()
             }
         }
     }
 
-    private fun publishChannels() {
+    private fun handleChannelDeleteLocked(msg: HtspMessage) {
+        val id = msg.int("channelId") ?: return
+
+        channelMap.remove(id)
+        epgByChannel.remove(id)
+
+        // dovol znovu snapshot, pokud se kanál objeví znovu
+        epgSnapshotState.remove(id)
+        epgSnapshotInFlight.remove(id)
+
+        publishChannelsLocked()
+    }
+
+    private fun publishChannelsLocked() {
         val sorted = channelMap.values
             .sortedWith(
                 compareBy<ChannelEntry>(
-                    { it.number == null },                 // channels WITH number first
-                    { it.number ?: Int.MAX_VALUE },        // then by channel number
-                    { it.name.lowercase() },               // then by name
-                    { it.id }                              // fallback
+                    { it.number == null },
+                    { it.number ?: Int.MAX_VALUE },
+                    { it.name.lowercase() },
+                    { it.id }
                 )
             )
             .map { ChannelUi(it.id, formatName(it)) }
@@ -368,19 +295,18 @@ class TvhRepository(
         setStatus("Channels: ${sorted.size}")
     }
 
-    private fun formatName(c: ChannelEntry): String {
-        return if (c.number != null) "${c.number}  ${c.name}" else c.name
-    }
+    private fun formatName(c: ChannelEntry): String =
+        if (c.number != null) "${c.number}  ${c.name}" else c.name
 
-    // ===== EPG handling (async) =====
+    // ===== EPG live handling =====
 
     fun nowEvent(channelId: Int, nowSec: Long): EpgEventEntry? {
         val list = epgByChannel[channelId]?.value ?: return null
         return list.firstOrNull { it.start <= nowSec && nowSec < it.stop }
-            ?: list.minByOrNull { kotlin.math.abs(it.start - nowSec) } // fallback
+            ?: list.minByOrNull { kotlin.math.abs(it.start - nowSec) }
     }
 
-    private fun handleEventUpsert(msg: HtspMessage) {
+    private fun handleEventUpsertLocked(msg: HtspMessage) {
         val eventId = msg.int("eventId") ?: msg.int("id") ?: return
         val channelId = msg.int("channelId") ?: msg.int("channel") ?: return
 
@@ -391,19 +317,16 @@ class TvhRepository(
         val stop = msg.long("stop") ?: msg.long("stopTime") ?: return
 
         val flow = epgByChannel.getOrPut(channelId) { MutableStateFlow(emptyList()) }
-
-        val updated = upsertAndTrim(
+        flow.value = upsertAndTrim(
             list = flow.value,
             item = EpgEventEntry(eventId, channelId, start, stop, title, summary),
             nowSec = System.currentTimeMillis() / 1000L,
             keepPastSec = 2 * 3600,
             keepFutureSec = 12 * 3600
         )
-
-        flow.value = updated
     }
 
-    private fun handleEventDelete(msg: HtspMessage) {
+    private fun handleEventDeleteLocked(msg: HtspMessage) {
         val eventId = msg.int("eventId") ?: msg.int("id") ?: return
         val channelId = msg.int("channelId") ?: msg.int("channel") ?: return
 
@@ -438,50 +361,24 @@ class TvhRepository(
             .toList()
     }
 
-    suspend fun loadEpgForChannel(
-        channelId: Int,
-        nowSec: Long = System.currentTimeMillis() / 1000L,
-        fromSec: Long = nowSec - 2 * 3600,
-        toSec: Long = nowSec + 12 * 3600
-    ) {
-        val fieldsWithChannel = mapOf(
-            "channelId" to channelId,
-            "start" to fromSec,
-            "stop" to toSec
-        )
-        val fieldsNoChannel = mapOf(
-            "start" to fromSec,
-            "stop" to toSec
-        )
-
-        val reply = runCatching { htsp.request("getEvents", fieldsWithChannel) }
-            .recoverCatching { htsp.request("getEpg", fieldsWithChannel) }
-            .recoverCatching { htsp.request("getEvents", fieldsNoChannel) }
-            .recoverCatching { htsp.request("getEpg", fieldsNoChannel) }
-            .getOrElse { t ->
-                setStatus("EPG load failed: ${t.message ?: t}")
-                return
-            }
-
-        ingestGetEventsReply(reply)
-    }
+    // ===== EPG snapshot ingest (reply) =====
 
     fun ingestGetEventsReply(reply: HtspMessage) {
+        // pokud to někdo volá zvenku, zajisti zámek
+        scope.launch {
+            stateMutex.withLock { ingestGetEventsReplyLocked(reply) }
+        }
+    }
+
+    private fun ingestGetEventsReplyLocked(reply: HtspMessage) {
         val raw = reply.fields["events"]
             ?: reply.fields["epg"]
             ?: reply.fields["entries"]
-            ?: run {
-                setStatus("EPG reply: no events field (keys=${reply.fields.keys})")
-                return
-            }
+            ?: return
 
         @Suppress("UNCHECKED_CAST")
-        val list = raw as? List<Map<String, Any?>> ?: run {
-            setStatus("EPG reply: unexpected type ${raw::class.java}")
-            return
-        }
+        val list = raw as? List<Map<String, Any?>> ?: return
 
-        var count = 0
         for (ev in list) {
             val eventId = (ev["eventId"] as? Number)?.toInt()
                 ?: (ev["id"] as? Number)?.toInt()
@@ -514,9 +411,6 @@ class TvhRepository(
                 keepPastSec = 2 * 3600,
                 keepFutureSec = 12 * 3600
             )
-            count++
         }
-
-        setStatus("EPG loaded: $count")
     }
 }

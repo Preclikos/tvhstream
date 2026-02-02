@@ -27,8 +27,8 @@ class VideoPlayerViewModel(
     fun epgForChannel(channelId: Int) = repo.epgForChannel(channelId)
 
     fun ensureEpgLoaded(channelId: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        /*viewModelScope.launch(Dispatchers.IO) {
             repo.loadEpgForChannel(channelId)
-        }
+        }*/
     }
 }

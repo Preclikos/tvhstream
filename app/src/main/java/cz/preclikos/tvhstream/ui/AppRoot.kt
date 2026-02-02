@@ -1,6 +1,11 @@
 package cz.preclikos.tvhstream.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -25,57 +30,64 @@ object Routes {
 fun AppRoot() {
     val nav = rememberNavController()
 
-    NavHost(
-        navController = nav,
-        startDestination = Routes.CHANNELS
-    ) {
-        composable(Routes.CHANNELS) {
-            val vm: AppConnectionViewModel = koinViewModel()
-            ChannelsScreen(
-                vm = vm,
-                onPlay = { channelId, serviceId, name ->
-                    nav.navigate(Routes.player(channelId, serviceId, name))
-                },
-                onOpenSettings = {
-                    nav.navigate(Routes.SETTINGS)
-                }
-            )
+    // ✅ jediný AppConnectionViewModel pro celou appku
+    val appVm: AppConnectionViewModel = koinViewModel()
+    val status by appVm.status.collectAsState()
+
+    Box(Modifier.fillMaxSize()) {
+        NavHost(
+            navController = nav,
+            startDestination = Routes.CHANNELS
+        ) {
+            composable(Routes.CHANNELS) {
+                ChannelsScreen(
+                    vm = appVm,
+                    onPlay = { channelId, serviceId, name ->
+                        nav.navigate(Routes.player(channelId, serviceId, name))
+                    },
+                    onOpenSettings = { nav.navigate(Routes.SETTINGS) }
+                )
+            }
+
+            composable(Routes.SETTINGS) {
+                val settings: SettingsStore = koinInject()
+                val passwords: SecurePasswordStore = koinInject()
+
+                SettingsScreen(
+                    settingsStore = settings,
+                    passwordStore = passwords,
+                    onDone = { nav.popBackStack() }
+                )
+            }
+
+            composable(
+                route = "${Routes.PLAYER}/{channelId}/{serviceId}/{channelName}",
+                arguments = listOf(
+                    navArgument("channelId") { type = NavType.IntType },
+                    navArgument("serviceId") { type = NavType.IntType },
+                    navArgument("channelName") { type = NavType.StringType },
+                )
+            ) { backStackEntry ->
+                val playerVm: VideoPlayerViewModel = koinViewModel()
+
+                val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
+                val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
+                val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
+
+                VideoPlayerScreen(
+                    vm = playerVm,
+                    channelId = channelId,
+                    channelName = channelName,
+                    serviceId = serviceId,
+                    onClose = { nav.popBackStack() }
+                )
+            }
         }
 
-        composable(Routes.SETTINGS) {
-            val vm: AppConnectionViewModel = koinViewModel()
-            val settings: SettingsStore = koinInject()
-            val passwords: SecurePasswordStore = koinInject()
-
-            SettingsScreen(
-                vm = vm,
-                settingsStore = settings,
-                passwordStore = passwords,
-                onDone = { nav.popBackStack() }
-            )
-        }
-
-        composable(
-            route = "${Routes.PLAYER}/{channelId}/{serviceId}/{channelName}",
-            arguments = listOf(
-                navArgument("channelId") { type = NavType.IntType },
-                navArgument("serviceId") { type = NavType.IntType },
-                navArgument("channelName") { type = NavType.StringType },
-            )
-        ) { backStackEntry ->
-            val playerVm: VideoPlayerViewModel = koinViewModel()
-
-            val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
-            val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
-            val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
-
-            VideoPlayerScreen(
-                vm = playerVm,
-                channelId = channelId,
-                channelName = channelName,
-                serviceId = serviceId,
-                onClose = { nav.popBackStack() }
-            )
-        }
+        // ✅ overlay “info hláška” nad vším
+        InfoBanner(
+            message = status,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

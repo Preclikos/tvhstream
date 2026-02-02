@@ -14,8 +14,7 @@ private val Context.dataStore by preferencesDataStore(name = "tvh_settings")
 data class ServerSettings(
     val host: String = "",
     val port: Int = 9982,
-    val username: String = "",
-    val autoConnect: Boolean = true
+    val username: String = ""
 )
 
 class SettingsStore(private val context: Context) {
@@ -32,8 +31,7 @@ class SettingsStore(private val context: Context) {
             ServerSettings(
                 host = p[Keys.HOST] ?: "",
                 port = p[Keys.PORT] ?: 9982,
-                username = p[Keys.USER] ?: "",
-                autoConnect = p[Keys.AUTO] ?: true
+                username = p[Keys.USER] ?: ""
             )
         }
 

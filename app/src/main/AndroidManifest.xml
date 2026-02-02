@@ -9,7 +9,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/banner"
         android:supportsRtl="true"
-        android:theme="@style/Theme.TvhClient"
+        android:theme="@style/Theme.TVHStream"
         android:name=".App">
 
         <activity

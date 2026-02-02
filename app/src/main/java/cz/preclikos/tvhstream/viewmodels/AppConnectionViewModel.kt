@@ -36,7 +36,6 @@ class AppConnectionViewModel(
 
         autoJob = viewModelScope.launch(Dispatchers.IO) {
             settings.serverSettings.collectLatest { s ->
-                if (!s.autoConnect) return@collectLatest
                 if (s.host.isBlank()) return@collectLatest
 
                 connectInternal(
@@ -77,7 +76,9 @@ class AppConnectionViewModel(
 
             htsp.enableAsyncMetadataAndWaitInitialSync()
 
-            repo.startEpgBackfillWorker(batchSize = 5)
+            repo.awaitChannelsReady()
+
+            repo.startEpgSnapshotWorker(batchSize = 5)
 
         } catch (e: Exception) {
             Timber.e(e, "Auto-connect failed")
