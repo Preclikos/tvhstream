@@ -101,37 +101,19 @@ fun VideoPlayerScreen(
     val ctx = LocalContext.current
     val player = remember { vm.getPlayerInstance(ctx) }
 
-    LaunchedEffect(serviceId) {
-        vm.playService(ctx, serviceId)
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            vm.stop()
-        }
-    }
-
-
     DisposableEffect(lifecycleOwner, serviceId) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> {
-                    vm.stop()   // ideálně stop + release
-                }
-
-                Lifecycle.Event.ON_RESUME -> {
-
-                    vm.playService(ctx, serviceId)
-                }
-
+                Lifecycle.Event.ON_START -> vm.playService(ctx, serviceId)
+                Lifecycle.Event.ON_STOP  -> vm.stop()
                 else -> Unit
             }
         }
 
         lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-
     KeepScreenOn(enabled = true)
 
     var controlsVisible by remember { mutableStateOf(true) }
