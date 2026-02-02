@@ -150,9 +150,9 @@ internal class Mpeg2VideoStreamReader : PlainStreamReader(C.TRACK_TYPE_VIDEO) {
             ) {
                 // bytes after start code
                 // We need bits from payload[i+4..]
-                val b4 = payload[i + 4].toInt() and 0xFF
-                val b5 = payload[i + 5].toInt() and 0xFF
-                val b6 = payload[i + 6].toInt() and 0xFF
+                payload[i + 4].toInt() and 0xFF
+                payload[i + 5].toInt() and 0xFF
+                payload[i + 6].toInt() and 0xFF
                 val b7 = payload[i + 7].toInt() and 0xFF
 
                 // Skip width/height bits (12+12 = 24 bits).

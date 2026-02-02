@@ -52,8 +52,6 @@ class HtspService(
 
     @Volatile private var challenge: ByteArray? = null
     @Volatile private var negotiatedHtspVersion: Int? = null
-
-    // initial sync gate (enableAsyncMetadata -> initialSyncCompleted)
     @Volatile private var initialSyncDef: CompletableDeferred<Unit>? = null
 
     suspend fun connect(
@@ -88,7 +86,6 @@ class HtspService(
         readerJob = scope.launch { readerLoop() }
 
         try {
-            // 1) HELLO (RPC)
             val hello = withTimeout(timeoutMs) {
                 request(
                     method = "hello",
@@ -105,8 +102,6 @@ class HtspService(
             challenge = hello.bin("challenge")
             val serverMax = hello.int("htspversion") ?: htspVersion
             negotiatedHtspVersion = min(htspVersion, serverMax)
-
-            // 2) AUTH (pokud máme creds; pokud nemáme, necháme to na server ACL / anonymous)
             val user = username?.trim().orEmpty()
             val pass = password?.trim().orEmpty()
 
@@ -124,7 +119,6 @@ class HtspService(
                     throw IllegalStateException("HTSP authentication failed (noaccess=1)")
                 }
             }
-            // else: bez auth pokračujeme (může být OK)
 
         } catch (t: Throwable) {
             disconnectInternal(t)
@@ -138,17 +132,13 @@ class HtspService(
      */
     suspend fun enableAsyncMetadataAndWaitInitialSync(timeoutMs: Long = 30_000) {
         if (!isConnectedUnsafe()) throw IllegalStateException("Not connected")
-
-        // nový gate pro každý sync
         val def = CompletableDeferred<Unit>()
         initialSyncDef = def
 
         try {
-            // reply je prázdný, důležité jsou následné async zprávy
             request(method = "enableAsyncMetadata", fields = emptyMap(), timeoutMs = timeoutMs, flush = true)
             withTimeout(timeoutMs) { def.await() }
         } finally {
-            // uklidit, ať to nezůstane viset
             if (initialSyncDef === def) initialSyncDef = null
         }
     }
@@ -209,8 +199,6 @@ class HtspService(
                     yield()
                     continue
                 }
-
-                // initial sync marker (server->client, bez seq)
                 if (msg.seq == null && msg.method == "initialSyncCompleted") {
                     initialSyncDef?.complete(Unit)
                 }

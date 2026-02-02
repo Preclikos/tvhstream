@@ -5,11 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColors = darkColorScheme(
-    // Hlavní akcent (focus / highlight)
+
     primary = Color(0xFF4FA3FF),
     onPrimary = Color(0xFFFFFFFF),              // ✅ text na modré = bílý
 
-    // Jemnější varianta pro pozadí highlightů / chips
     primaryContainer = Color(0xFF143A66),
     onPrimaryContainer = Color(0xFFE6EAF0),
 

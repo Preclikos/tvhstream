@@ -30,15 +30,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -51,8 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
+import cz.preclikos.tvhstream.ui.player.progress
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
-import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.delay
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -95,7 +92,6 @@ fun ChannelsScreen(
         }
     }
 
-    // Layout jako EPG: nahoře header, pod tím 2 sloupce
     Column(
         Modifier
             .fillMaxSize()
@@ -119,7 +115,7 @@ fun ChannelsScreen(
         Spacer(Modifier.height(10.dp))
 
         Row(Modifier.fillMaxSize()) {
-            // ===== LEFT: seznam kanálů =====
+
 
             Surface(
                 tonalElevation = 2.dp,
@@ -159,7 +155,6 @@ fun ChannelsScreen(
 
             Spacer(Modifier.width(12.dp))
 
-            // ===== RIGHT: detail pořadu =====
             Surface(
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.medium,
@@ -197,10 +192,10 @@ private fun ChannelRow(
         Modifier
             .fillMaxWidth()
             .background(bg)
-            // TV focus: jakmile se řádek fokusne, přepni pravý panel
+
             .onFocusChanged { if (it.isFocused) onFocus() }
             .focusable()
-            // OK/Enter spustí přehrávání
+
             .onKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyUp &&
                     (ev.key == Key.Enter || ev.key == Key.NumPadEnter || ev.key == Key.DirectionCenter)
@@ -209,7 +204,7 @@ private fun ChannelRow(
                     true
                 } else false
             }
-            // Klik/tap spustí přehrávání
+
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -218,7 +213,7 @@ private fun ChannelRow(
     ) {
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 Modifier
@@ -274,8 +269,8 @@ private fun EpgDetailPane(
     now: Any?, // <- nechávám Any? aby to šlo zkopírovat; níže cast na tvůj typ
     nowSec: Long
 ) {
-    // PŘEPIŠ si na svůj typ, např. `val e = now as? EpgEvent`
-    // Tady používám bezpečné volání přes reflexi-like přístup ne; raději explicitně:
+
+
     val e = now as? EpgEventEntry // <-- uprav na svůj balíček/třídu
 
     val progress = remember(e, nowSec) { e?.progress(nowSec) ?: 0f }
@@ -299,7 +294,7 @@ private fun EpgDetailPane(
         Spacer(Modifier.height(12.dp))
 
         if (e != null) {
-            // Časové info (podobně jako na fotce: datum/čas/doba trvání)
+
             val start = remember(e) { e.start }
             val end = remember(e) { e.stop }
             val durSec = (end - start).coerceAtLeast(0)

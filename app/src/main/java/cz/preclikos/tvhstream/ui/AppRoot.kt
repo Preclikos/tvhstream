@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
+import cz.preclikos.tvhstream.ui.player.VideoPlayerScreen
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -30,7 +31,6 @@ object Routes {
 fun AppRoot() {
     val nav = rememberNavController()
 
-    // ✅ jediný AppConnectionViewModel pro celou appku
     val appVm: AppConnectionViewModel = koinViewModel()
     val status by appVm.status.collectAsState()
 
@@ -84,7 +84,6 @@ fun AppRoot() {
             }
         }
 
-        // ✅ overlay “info hláška” nad vším
         InfoBanner(
             message = status,
             modifier = Modifier.fillMaxSize()

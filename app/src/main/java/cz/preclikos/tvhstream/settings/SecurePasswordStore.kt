@@ -20,7 +20,6 @@ class SecurePasswordStore(private val context: Context) {
 
     private val passwordKey = stringPreferencesKey("password_enc")
 
-    // alias klíče v AndroidKeyStore
     private val keyAlias = "tvh_secure_aes_key"
 
     suspend fun getPassword(): String {
@@ -41,7 +40,6 @@ class SecurePasswordStore(private val context: Context) {
         context.secureDataStore.edit { it.clear() }
     }
 
-    // --- Crypto ---
 
     private fun getOrCreateSecretKey(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -74,7 +72,6 @@ class SecurePasswordStore(private val context: Context) {
         val iv = cipher.iv // 12B random IV
         val cipherText = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
 
-        // uložíme: [IV][CIPHERTEXT]
         val out = ByteArray(iv.size + cipherText.size)
         System.arraycopy(iv, 0, out, 0, iv.size)
         System.arraycopy(cipherText, 0, out, iv.size, cipherText.size)

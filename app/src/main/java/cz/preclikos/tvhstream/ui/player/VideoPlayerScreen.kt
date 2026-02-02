@@ -1,8 +1,10 @@
-package cz.preclikos.tvhstream.ui
+package cz.preclikos.tvhstream.ui.player
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.view.WindowManager
+import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,14 +26,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -57,20 +56,22 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
-import cz.preclikos.tvhstream.ui.player.AudioTrackDialog
-import cz.preclikos.tvhstream.ui.player.SubtitleTrackDialog
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
 
 val topGradient = Brush.verticalGradient(
     0f to Color.Black.copy(alpha = 0.92f),
@@ -86,7 +87,7 @@ val bottomGradient = Brush.verticalGradient(
     1f to Color.Black.copy(alpha = 0.92f)
 )
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
     vm: VideoPlayerViewModel,
@@ -95,22 +96,40 @@ fun VideoPlayerScreen(
     serviceId: Int,
     onClose: () -> Unit
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val ctx = LocalContext.current
     val player = remember { vm.getPlayerInstance(ctx) }
 
-    // spustí playback při vstupu / změně serviceId
     LaunchedEffect(serviceId) {
         vm.playService(ctx, serviceId)
-    }
-
-    LaunchedEffect(channelId) {
-        vm.ensureEpgLoaded(channelId)
     }
 
     DisposableEffect(Unit) {
         onDispose {
             vm.stop()
         }
+    }
+
+
+    DisposableEffect(lifecycleOwner, serviceId) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    vm.stop()   // ideálně stop + release
+                }
+
+                Lifecycle.Event.ON_RESUME -> {
+
+                    vm.playService(ctx, serviceId)
+                }
+
+                else -> Unit
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     KeepScreenOn(enabled = true)
@@ -136,10 +155,8 @@ fun VideoPlayerScreen(
         hideControls()
     }
 
-    // EPG list pro kanál
     val epg by vm.epgForChannel(channelId).collectAsState()
 
-    // ticker pro progress + hodiny
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -216,6 +233,7 @@ fun VideoPlayerScreen(
         }
     }
 }
+
 @Composable
 private fun KodiOverlayControlsTv(
     player: Player,
@@ -230,15 +248,13 @@ private fun KodiOverlayControlsTv(
     var showAudio by remember { mutableStateOf(false) }
     var showSubs by remember { mutableStateOf(false) }
 
-    // poslední focus v overlay (0=stop, 1=audio, 2=subs)
     var lastFocused by rememberSaveable { mutableIntStateOf(0) }
 
     val stopFR = remember { FocusRequester() }
     val audioFR = remember { FocusRequester() }
-    val subsFR  = remember { FocusRequester() }
+    val subsFR = remember { FocusRequester() }
     val focusRequesters = remember { listOf(stopFR, audioFR, subsFR) }
 
-    // když se overlay znovu ukáže, vrať fokus tam, kde byl
     LaunchedEffect(controlsVisible) {
         if (controlsVisible) {
             focusRequesters.getOrNull(lastFocused)?.requestFocus()
@@ -262,7 +278,6 @@ private fun KodiOverlayControlsTv(
 
     Box(Modifier.fillMaxSize()) {
 
-        // ===== TOP gradient =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -307,7 +322,6 @@ private fun KodiOverlayControlsTv(
             }
         }
 
-        // ===== BOTTOM gradient =====
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -319,7 +333,7 @@ private fun KodiOverlayControlsTv(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom
             ) {
-                // LEFT: Stop/Back icon button
+
                 RoundIconButton(
                     icon = { Icon(Icons.Filled.Stop, contentDescription = "Stop") },
                     onClick = { onUserInteraction(); onBack() },
@@ -327,7 +341,6 @@ private fun KodiOverlayControlsTv(
                     onFocused = { lastFocused = 0 }
                 )
 
-                // CENTER: time + progress
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -365,10 +378,14 @@ private fun KodiOverlayControlsTv(
                     }
                 }
 
-                // RIGHT: Audio + Subs icon buttons
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     RoundIconButton(
-                        icon = { Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Audio") },
+                        icon = {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Audio"
+                            )
+                        },
                         onClick = { onUserInteraction(); showAudio = true },
                         focusRequester = audioFR,
                         onFocused = { lastFocused = 1 }
@@ -439,18 +456,17 @@ private fun KeepScreenOn(enabled: Boolean) {
 
 private fun Context.findActivity(): Activity? {
     var c = this
-    while (c is android.content.ContextWrapper) {
+    while (c is ContextWrapper) {
         if (c is Activity) return c
         c = c.baseContext
     }
     return null
 }
 
-// ===== Helpers (EPG) =====
 
 private fun List<EpgEventEntry>.nowEvent(nowSec: Long): EpgEventEntry? =
     firstOrNull { it.start <= nowSec && nowSec < it.stop }
-        ?: minByOrNull { kotlin.math.abs(it.start - nowSec) } // fallback, když nemáme přesně teď
+        ?: minByOrNull { abs(it.start - nowSec) } // fallback, když nemáme přesně teď
 
 private fun List<EpgEventEntry>.nextAfter(now: EpgEventEntry?): EpgEventEntry? {
     val nowId = now?.eventId
@@ -467,7 +483,7 @@ fun EpgEventEntry.progress(nowSec: Long): Float {
 }
 
 private fun EpgEventEntry.timeRangeText(): String? {
-    // start/stop jsou epoch seconds (u tebe)
+
     val s = formatClock(start)
     val e = formatClock(stop)
     return "$s–$e"

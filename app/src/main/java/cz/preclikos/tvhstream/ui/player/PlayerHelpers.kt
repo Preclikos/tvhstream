@@ -67,7 +67,7 @@ fun selectTextTrack(player: Player, choice: UiTrack?) {
         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
 
     if (choice == null) {
-        // vypnout titulky
+
         builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
     } else {
         builder

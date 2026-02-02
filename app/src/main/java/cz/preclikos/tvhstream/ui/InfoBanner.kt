@@ -23,7 +23,6 @@ fun InfoBanner(
     var visible by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
 
-    // když se message změní, ukaž banner
     LaunchedEffect(message) {
         val trimmed = message.trim()
         if (trimmed.isEmpty() || trimmed == lastMessage) return@LaunchedEffect
@@ -46,7 +45,7 @@ fun InfoBanner(
         ) + fadeOut(animationSpec = tween(220)),
         modifier = modifier
     ) {
-        // "Kodi blok": tmavý panel, jemný okraj, čitelný text
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()

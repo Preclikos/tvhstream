@@ -50,8 +50,6 @@ class AppConnectionViewModel(
 
     fun reconnectNow() {
         viewModelScope.launch {
-            // vezmeme poslední settings jednorázově (jednoduše: přes status/store v UI; nebo uděláme cached)
-            // rychlé řešení: nastav v SettingsScreen tlačítko "Save & Connect"
         }
     }
 
@@ -86,6 +84,5 @@ class AppConnectionViewModel(
         }
     }
 
-    // helper pro list: NOW event snapshot (bez collectů v LazyColumn)
     fun nowEvent(channelId: Int, nowSec: Long) = repo.nowEvent(channelId, nowSec)
 }

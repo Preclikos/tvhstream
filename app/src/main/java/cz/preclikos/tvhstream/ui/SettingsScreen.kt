@@ -48,7 +48,6 @@ fun SettingsScreen(
     var pass by rememberSaveable { mutableStateOf("") }
     var auto by rememberSaveable { mutableStateOf(true) }
 
-    // načti současné hodnoty jednou
     LaunchedEffect(Unit) {
         settingsStore.serverSettings.collect { s ->
             host = s.host

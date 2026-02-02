@@ -25,12 +25,10 @@ class TvhRepository(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
-    // ===== Status =====
     private val _status = MutableStateFlow("Disconnected")
     val status: StateFlow<String> = _status
     fun setStatus(text: String) { _status.value = text }
 
-    // ===== Channels =====
     private data class ChannelEntry(
         val id: Int,
         val name: String,
@@ -41,10 +39,8 @@ class TvhRepository(
     private val _channelsUi = MutableStateFlow<List<ChannelUi>>(emptyList())
     val channelsUi: StateFlow<List<ChannelUi>> = _channelsUi
 
-    // Barrier: repo-level jistota, že kanály jsou opravdu zpracované
     private var channelsReadyDef = CompletableDeferred<Unit>()
 
-    // ===== EPG =====
     private val epgByChannel = mutableMapOf<Int, MutableStateFlow<List<EpgEventEntry>>>()
     fun epgForChannel(channelId: Int): StateFlow<List<EpgEventEntry>> =
         epgByChannel.getOrPut(channelId) { MutableStateFlow(emptyList()) }
@@ -53,7 +49,6 @@ class TvhRepository(
     private val epgSnapshotState = mutableMapOf<Int, EpgSnapshotState>()
     private val epgSnapshotInFlight = mutableSetOf<Int>()
 
-    // Jeden mutex na všechny “mutable state” operace (channels + epg ingest + snapshot tracking)
     private val stateMutex = Mutex()
 
     private var epgBackfillJob: Job? = null
@@ -86,8 +81,7 @@ class TvhRepository(
             channelMap.clear()
             _channelsUi.value = emptyList()
 
-            // EPG nechávám čistě podle tvé preference:
-            // - pokud chceš při reconnectu EPG zahodit => clear i epgByChannel + snapshotState
+
             epgByChannel.clear()
             epgSnapshotState.clear()
             epgSnapshotInFlight.clear()
@@ -100,7 +94,6 @@ class TvhRepository(
         withTimeout(timeoutMs) { channelsReadyDef.await() }
     }
 
-    // ===== EPG Snapshot worker (1× per channel) =====
 
     fun startEpgSnapshotWorker(
         batchSize: Int = 5,
@@ -145,7 +138,7 @@ class TvhRepository(
         fromSec: Long,
         toSec: Long
     ): Boolean {
-        // atomicky rozhodni: smí se snapshot udělat?
+
         stateMutex.withLock {
             val st = epgSnapshotState[channelId] ?: EpgSnapshotState.NOT_LOADED
             if (st == EpgSnapshotState.LOADED) return false
@@ -167,7 +160,6 @@ class TvhRepository(
 
             if (reply.fields.containsKey("error")) return false
 
-            // ingest + označení LOADED musí být pod zámkem
             stateMutex.withLock {
                 ingestGetEventsReplyLocked(reply)
                 epgSnapshotState[channelId] = EpgSnapshotState.LOADED
@@ -203,15 +195,13 @@ class TvhRepository(
         return out
     }
 
-    // ===== Server messages =====
 
     private suspend fun handleServerMessage(msg: HtspMessage) {
         when (msg.method) {
-            // Channels
+
             "channelAdd", "channelUpdate" -> stateMutex.withLock { handleChannelLocked(msg) }
             "channelDelete" -> stateMutex.withLock { handleChannelDeleteLocked(msg) }
 
-            // Barrier marker (po enableAsyncMetadata)
             "initialSyncCompleted" -> {
                 stateMutex.withLock {
                     publishChannelsLocked()
@@ -219,13 +209,11 @@ class TvhRepository(
                 }
             }
 
-            // EPG live stream
             "eventAdd", "eventUpdate" -> stateMutex.withLock { handleEventUpsertLocked(msg) }
             "eventDelete" -> stateMutex.withLock { handleEventDeleteLocked(msg) }
         }
     }
 
-    // ===== Channels handling =====
 
     private fun handleChannelLocked(msg: HtspMessage) {
         when (msg.method) {
@@ -241,7 +229,6 @@ class TvhRepository(
 
                 channelMap[id] = ChannelEntry(id, name, number)
 
-                // snapshot pro nový kanál ještě nebyl
                 if (epgSnapshotState[id] == null) epgSnapshotState[id] = EpgSnapshotState.NOT_LOADED
 
                 publishChannelsLocked()
@@ -272,7 +259,6 @@ class TvhRepository(
         channelMap.remove(id)
         epgByChannel.remove(id)
 
-        // dovol znovu snapshot, pokud se kanál objeví znovu
         epgSnapshotState.remove(id)
         epgSnapshotInFlight.remove(id)
 
@@ -298,7 +284,6 @@ class TvhRepository(
     private fun formatName(c: ChannelEntry): String =
         if (c.number != null) "${c.number}  ${c.name}" else c.name
 
-    // ===== EPG live handling =====
 
     fun nowEvent(channelId: Int, nowSec: Long): EpgEventEntry? {
         val list = epgByChannel[channelId]?.value ?: return null
@@ -361,10 +346,9 @@ class TvhRepository(
             .toList()
     }
 
-    // ===== EPG snapshot ingest (reply) =====
 
     fun ingestGetEventsReply(reply: HtspMessage) {
-        // pokud to někdo volá zvenku, zajisti zámek
+
         scope.launch {
             stateMutex.withLock { ingestGetEventsReplyLocked(reply) }
         }

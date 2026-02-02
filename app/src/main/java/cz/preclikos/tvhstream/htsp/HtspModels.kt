@@ -7,7 +7,6 @@ data class HtspMessage(
     val rawPayload: ByteArray? = null  // pro muxpkt TS bytes (pokud rovnou vytáhneš)
 ) {
 
-    // --- Typed getters (hodí se pro hello/login/authenticate atd.) ---
     fun int(key: String): Int? = when (val v = fields[key]) {
         is Int -> v
         is Long -> v.toInt()
@@ -61,7 +60,6 @@ data class HtspMessage(
     @Suppress("UNCHECKED_CAST")
     fun list(key: String): List<Any?>? = fields[key] as? List<Any?>
 
-    // --- Equality / hashcode safe pro null rawPayload ---
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is HtspMessage) return false
@@ -70,7 +68,6 @@ data class HtspMessage(
         if (method != other.method) return false
         if (fields != other.fields) return false
 
-        // null-safe ByteArray compare
         val a = rawPayload
         val b = other.rawPayload
         if (a === null && b === null) return true

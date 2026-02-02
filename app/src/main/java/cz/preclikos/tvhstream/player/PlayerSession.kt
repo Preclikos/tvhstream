@@ -22,14 +22,12 @@ import kotlinx.coroutines.withContext
 class PlayerSession(
     private val htsp: HtspService
 ) {
-
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var player: ExoPlayer? = null
     private lateinit var dataSourceFactory: HtspSubscriptionDataSource.Factory
 
     private var subscriptionId: Int? = null
 
-    // State for restoring after process death / rotation
     private var playWhenReadyState = true
     private var currentItem = 0
     private var playbackPosition = 0L
@@ -47,7 +45,6 @@ class PlayerSession(
                 p.addAnalyticsListener(EventLogger())
                 player = p
 
-                // restore state (na Main)
                 p.playWhenReady = playWhenReadyState
                 p.seekTo(currentItem, playbackPosition)
             }
@@ -55,15 +52,9 @@ class PlayerSession(
 
     @OptIn(UnstableApi::class)
     fun playService(context: Context, serviceId: Int) {
-        //activeServiceId = serviceId
-
-        // zruš předchozí běhy
-        //eventCollectorJob?.cancel()
-        //subscribeJob?.cancel()
 
         subscriptionId = null
 
-        // VŠECHNO kolem playeru na MAIN
         mainScope.launch {
             val p = getOrCreatePlayer(context)
 
@@ -85,7 +76,7 @@ class PlayerSession(
     }
 
     fun stop() {
-        // stop/release vždy na Main
+
         mainScope.launch {
             player?.let { p ->
                 updateState(p)
@@ -97,7 +88,6 @@ class PlayerSession(
     }
 
     fun release() {
-        // zruš jobs
 
         dataSourceFactory.releaseCurrentDataSource()
         mainScope.launch {
