@@ -56,6 +56,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -65,6 +66,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.delay
@@ -105,7 +107,7 @@ fun VideoPlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> vm.playService(ctx, serviceId)
-                Lifecycle.Event.ON_STOP  -> vm.stop()
+                Lifecycle.Event.ON_STOP -> vm.stop()
                 else -> Unit
             }
         }
@@ -295,7 +297,10 @@ private fun KodiOverlayControlsTv(
                     Text(clock, color = Color.White, style = MaterialTheme.typography.titleLarge)
                     if (endsAt.isNotEmpty()) {
                         Text(
-                            "Končí v: $endsAt",
+                            text = stringResource(
+                                id = R.string.player_ends_in,
+                                endsAt
+                            ),
                             color = Color.White.copy(alpha = 0.90f),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -348,9 +353,22 @@ private fun KodiOverlayControlsTv(
                     )
 
                     if (nextEvent != null) {
+
                         val nextRange = remember(nextEvent) { nextEvent.timeRangeText() ?: "" }
+                        val text = if (nextRange.isNotEmpty()) {
+                            stringResource(
+                                id = R.string.player_next_event_with_range,
+                                nextEvent.title,
+                                nextRange
+                            )
+                        } else {
+                            stringResource(
+                                id = R.string.player_next_event,
+                                nextEvent.title
+                            )
+                        }
                         Text(
-                            text = "Následuje: ${nextEvent.title}${if (nextRange.isNotEmpty()) " • $nextRange" else ""}",
+                            text = text,
                             color = Color.White.copy(alpha = 0.80f),
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,

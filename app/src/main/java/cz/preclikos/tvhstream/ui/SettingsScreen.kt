@@ -27,10 +27,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import kotlinx.coroutines.MainScope
@@ -65,25 +67,39 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            "Settings",
+            text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
+
         Column {
-            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("Host") })
+            OutlinedTextField(
+                value = host,
+                onValueChange = { host = it },
+                label = { Text(stringResource(R.string.host)) }
+            )
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(value = port, onValueChange = { port = it }, label = { Text("Port") })
+
+            OutlinedTextField(
+                value = port,
+                onValueChange = { port = it },
+                label = { Text(stringResource(R.string.port)) }
+            )
             Spacer(Modifier.height(12.dp))
+
             OutlinedTextField(
                 value = user,
                 onValueChange = { user = it },
-                label = { Text("Username") })
+                label = { Text(stringResource(R.string.username)) }
+            )
             Spacer(Modifier.height(12.dp))
+
             PasswordField(
                 value = pass,
                 onValueChange = { pass = it }
             )
         }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 val p = port.toIntOrNull() ?: 9982
@@ -92,9 +108,13 @@ fun SettingsScreen(
                     passwordStore.setPassword(pass)
                     onDone()
                 }
-            }) { Text("Save") }
+            }) {
+                Text(stringResource(R.string.save))
+            }
 
-            OutlinedButton(onClick = onDone) { Text("Back") }
+            OutlinedButton(onClick = onDone) {
+                Text(stringResource(R.string.back))
+            }
         }
     }
 }
@@ -103,41 +123,32 @@ fun SettingsScreen(
 fun PasswordField(
     value: String,
     onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    label: String = "Password"
+    modifier: Modifier = Modifier
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
+
+    val icon = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility
+    val desc = stringResource(if (passwordVisible) R.string.hide_password else R.string.show_password)
 
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
-        label = { Text(label) },
+        label = { Text(stringResource(R.string.password)) },
 
-        visualTransformation = if (passwordVisible)
+        visualTransformation = if (passwordVisible) {
             VisualTransformation.None
-        else
-            PasswordVisualTransformation(),
+        } else {
+            PasswordVisualTransformation()
+        },
 
         trailingIcon = {
-            val icon = if (passwordVisible)
-                Icons.Default.VisibilityOff
-            else
-                Icons.Default.Visibility
-
-            val desc = if (passwordVisible)
-                "Hide password"
-            else
-                "Show password"
-
             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                 Icon(imageVector = icon, contentDescription = desc)
             }
         },
 
-        keyboardOptions = KeyboardOptions(
-            imeAction = ImeAction.Done
-        ),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         singleLine = true
     )
 }

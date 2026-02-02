@@ -1,0 +1,40 @@
+<resources>
+    <string name="channel_list">Channel List</string>
+
+    <string name="player_ends_in">Končí v: %1$s</string>
+    <string name="player_next_event">Následuje: %1$s</string>
+    <string name="player_next_event_with_range">Následuje: %1$s • %2$s</string>
+
+    <string name="options">Možnosti</string>
+    <string name="no_epg">Bez EPG</string>
+    <string name="select_channel_hint">Vyber kanál vlevo pro zobrazení detailu.</string>
+
+    <!-- EPG detail line -->
+    <string name="epg_time_duration">Čas: %1$s – %2$s • Doba: %3$d min</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Nastavení</string>
+    <string name="host">Host</string>
+    <string name="port">Port</string>
+    <string name="username">Uživatelské jméno</string>
+    <string name="password">Heslo</string>
+
+    <string name="save">Uložit</string>
+    <string name="back">Zpět</string>
+
+    <!-- Password visibility -->
+    <string name="show_password">Zobrazit heslo</string>
+    <string name="hide_password">Skrýt heslo</string>
+
+    <!-- Audio -->
+    <string name="audio_track">Audio stopa</string>
+    <string name="no_audio_tracks">Žádné audio stopy.</string>
+
+    <!-- Subtitles -->
+    <string name="subtitles">Titulky</string>
+    <string name="subtitles_off">Vypnuto</string>
+    <string name="no_subtitles">Žádné titulky.</string>
+
+    <!-- Common -->
+    <string name="close">Zavřít</string>
+</resources>

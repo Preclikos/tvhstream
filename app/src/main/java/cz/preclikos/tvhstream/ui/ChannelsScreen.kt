@@ -109,7 +109,9 @@ fun ChannelsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
-            TextButton(onClick = onOpenSettings) { Text("Možnosti") }
+            TextButton(onClick = onOpenSettings) {
+                Text(stringResource(R.string.options))
+            }
         }
 
         Spacer(Modifier.height(10.dp))
@@ -136,7 +138,7 @@ fun ChannelsScreen(
                         ChannelRow(
                             number = index + 1,
                             name = ch.name,
-                            programTitle = now?.title ?: "No EPG",
+                            programTitle = now?.title ?: stringResource(R.string.no_epg),
                             progress = if (now != null) progress else null,
                             focused = isFocused,
                             onFocus = { focusedChannelId = ch.id },
@@ -284,7 +286,7 @@ private fun EpgDetailPane(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = e?.title ?: "No EPG",
+                    text = e?.title ?: stringResource(R.string.no_epg),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -301,7 +303,12 @@ private fun EpgDetailPane(
             val durMin = durSec / 60
 
             Text(
-                "Čas: ${formatHm(start)} – ${formatHm(end)}  •  Doba: ${durMin} min",
+                text = stringResource(
+                    R.string.epg_time_duration,
+                    formatHm(start),
+                    formatHm(end),
+                    durMin.toInt()
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -324,7 +331,7 @@ private fun EpgDetailPane(
             )
         } else {
             Text(
-                text = "Vyber kanál vlevo pro zobrazení detailu.",
+                text = stringResource(R.string.select_channel_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -1,5 +1,44 @@
 <resources>
-    <string name="app_name">TVHStream</string>
+    <string name="app_name" translatable="false">TVHStream</string>
 
     <string name="channel_list">Channel List</string>
+
+    <string name="player_ends_in">Ends in: %1$s</string>
+    <string name="player_next_event">Up next: %1$s</string>
+    <string name="player_next_event_with_range">Up next: %1$s • %2$s</string>
+
+    <string name="options">Options</string>
+    <string name="no_epg">No EPG</string>
+    <string name="select_channel_hint">Select a channel on the left to see details.</string>
+
+    <!-- EPG detail line -->
+    <string name="epg_time_duration">Time: %1$s – %2$s • Duration: %3$d min</string>
+
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="host">Host</string>
+    <string name="port">Port</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+
+    <string name="save">Save</string>
+    <string name="back">Back</string>
+
+    <!-- Password visibility -->
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
+
+    <!-- Audio -->
+    <string name="audio_track">Audio track</string>
+    <string name="no_audio_tracks">No audio tracks available.</string>
+
+    <!-- Subtitles -->
+    <string name="subtitles">Subtitles</string>
+    <string name="subtitles_off">Off</string>
+    <string name="no_subtitles">No subtitles available.</string>
+
+    <!-- Common -->
+    <string name="close">Close</string>
+
 </resources>
