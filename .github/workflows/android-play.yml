@@ -41,15 +41,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          track="internal"
+          
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "RELEASE_TRACK=production" >> $GITHUB_ENV
-            echo "VERSION_NAME=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+            track="production"
+            echo "VERSION_NAME=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
           elif [[ "${GITHUB_REF}" == refs/heads/release/* ]]; then
-            echo "RELEASE_TRACK=closed" >> $GITHUB_ENV
-          else
-            echo "RELEASE_TRACK=internal" >> $GITHUB_ENV
+            track="closed"
           fi
-          echo "Using RELEASE_TRACK=$RELEASE_TRACK"
+          
+          echo "RELEASE_TRACK=${track}" >> "$GITHUB_ENV"
+          echo "Using RELEASE_TRACK=${track}"
 
       # versionCode bump (Play requires monotonically increasing versionCode)
       - name: Bump versionCode in build.gradle.kts
