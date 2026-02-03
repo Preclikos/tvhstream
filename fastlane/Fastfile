@@ -1,25 +1,26 @@
 default_platform(:android)
 
 platform :android do
-  lane :deploy_internal do
+  lane :deploy do
     %w[KEYSTORE_PATH ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD].each do |k|
       UI.user_error!("Missing env var #{k}") unless ENV[k] && !ENV[k].empty?
     end
 
+    track = ENV["RELEASE_TRACK"] || "internal"
+
     gradle(
       task: "clean bundleRelease",
       properties: {
-        # signing
         "android.injected.signing.store.file" => ENV["KEYSTORE_PATH"],
         "android.injected.signing.store.password" => ENV["ANDROID_KEYSTORE_PASSWORD"],
         "android.injected.signing.key.alias" => ENV["ANDROID_KEY_ALIAS"],
-        "android.injected.signing.key.password" => ENV["ANDROID_KEY_PASSWORD"],
-      }.compact
+        "android.injected.signing.key.password" => ENV["ANDROID_KEY_PASSWORD"]
+      }
     )
 
     supply(
-      track: "internal",
-	  release_status: "draft",
+      track: track,
+      release_status: "draft",
       aab: lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
     )
   end

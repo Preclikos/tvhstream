@@ -2,7 +2,11 @@ name: Build & Deploy to Google Play
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - "master"
+      - "release/**"
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
 
 jobs:
@@ -21,31 +25,47 @@ jobs:
           cache: gradle
 
       - name: Decode keystore
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > upload.jks
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > upload.jks
 
       - name: Create Play service account json
-        run: |
-          echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
+        run: echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Track selection:
+      # - master -> internal
+      # - release/* -> closed
+      # - vX.Y.Z tag -> production
+      - name: Set RELEASE_TRACK
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "RELEASE_TRACK=production" >> $GITHUB_ENV
+            echo "VERSION_NAME=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          elif [[ "${GITHUB_REF}" == refs/heads/release/* ]]; then
+            echo "RELEASE_TRACK=closed" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TRACK=internal" >> $GITHUB_ENV
+          fi
+          echo "Using RELEASE_TRACK=$RELEASE_TRACK"
+
+      # versionCode bump (Play requires monotonically increasing versionCode)
       - name: Bump versionCode in build.gradle.kts
         shell: bash
         run: |
           set -euo pipefail
-          VC="${GITHUB_RUN_NUMBER}"
+          # Offset is a safety net so it never collides with existing Play versionCodes
+          VC="$((10000 + GITHUB_RUN_NUMBER))"
           echo "Setting versionCode to ${VC}"
 
           FILE="app/build.gradle.kts"
 
-          # nahradí: versionCode = 1  -> versionCode = <VC>
-          # (funguje i když tam jsou mezery)
           sed -i -E "s/versionCode[[:space:]]*=[[:space:]]*[0-9]+/versionCode = ${VC}/" "$FILE"
 
           echo "Resulting line:"
           grep -n "versionCode" "$FILE" | head -n 5
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
 
       - name: Upload to Play (Fastlane)
         env:
@@ -54,8 +74,9 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SUPPLY_JSON_KEY: ${{ github.workspace }}/play-service-account.json
+          RELEASE_TRACK: ${{ env.RELEASE_TRACK }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
         run: |
-          chmod +x ./gradlew
           gem install fastlane -N --user-install
           echo "$HOME/.local/share/gem/ruby/3.2.0/bin" >> $GITHUB_PATH
-          fastlane android deploy_internal
+          fastlane android deploy
