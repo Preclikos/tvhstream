@@ -31,10 +31,15 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Upload to Play (Fastlane supply)
+      - name: Upload to Play (Fastlane)
         env:
+          KEYSTORE_PATH: ${{ github.workspace }}/upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SUPPLY_JSON_KEY: ${{ github.workspace }}/play-service-account.json
         run: |
+          chmod +x ./gradlew
           gem install fastlane -N --user-install
           echo "$HOME/.local/share/gem/ruby/3.2.0/bin" >> $GITHUB_PATH
           fastlane android deploy_internal
