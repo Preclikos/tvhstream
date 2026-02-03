@@ -1,5 +1,5 @@
 <resources>
-    <string name="channel_list">Channel List</string>
+    <string name="channel_list">Seznam kanálů</string>
 
     <string name="player_ends_in">Končí v: %1$s</string>
     <string name="player_next_event">Následuje: %1$s</string>
