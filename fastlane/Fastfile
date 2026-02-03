@@ -19,6 +19,7 @@ platform :android do
 
     supply(
       track: "internal",
+	  release_status: "draft",
       aab: lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH]
     )
   end
