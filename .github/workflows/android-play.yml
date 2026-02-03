@@ -28,6 +28,22 @@ jobs:
         run: |
           echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
 
+      - name: Bump versionCode in build.gradle.kts
+        shell: bash
+        run: |
+          set -euo pipefail
+          VC="${GITHUB_RUN_NUMBER}"
+          echo "Setting versionCode to ${VC}"
+
+          FILE="app/build.gradle.kts"
+
+          # nahradí: versionCode = 1  -> versionCode = <VC>
+          # (funguje i když tam jsou mezery)
+          sed -i -E "s/versionCode[[:space:]]*=[[:space:]]*[0-9]+/versionCode = ${VC}/" "$FILE"
+
+          echo "Resulting line:"
+          grep -n "versionCode" "$FILE" | head -n 5
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 

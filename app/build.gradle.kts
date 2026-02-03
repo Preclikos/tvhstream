@@ -18,13 +18,6 @@ android {
         applicationId = "cz.preclikos.tvhstream"
         minSdk = 28
         targetSdk = 36
-		
-		val vc = (project.findProperty("versionCode") as String?)?.toIntOrNull()
-        val vn = project.findProperty("versionName") as String?
-
-		versionCode = vc ?: 1
-		versionName = vn ?: "dev"
-		
         versionCode = 1
         versionName = "0.1"
     }
