@@ -348,12 +348,12 @@ class HtspSubscriptionDataSource private constructor(
 
     override fun resume() {
         Timber.d("Resuming subscription data source (%d)", dataSourceNumber)
-        val intent = Intent(context, ConnectionService::class.java).apply {
-            putExtra("method", "subscriptionSpeed")
-            putExtra("subscriptionId", subscriptionId)
-            putExtra("speed", 100)
+        runBlocking {
+            htspConnection.request(
+                "subscriptionSpeed",
+                mapOf("subscriptionId" to subscriptionId, "speed" to 100)
+            )
         }
-        context.startService(intent)
     }
 
     /**
