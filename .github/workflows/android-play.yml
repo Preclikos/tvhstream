@@ -2,7 +2,7 @@ name: Build & Deploy to Google Play
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   workflow_dispatch:
 
 jobs:
