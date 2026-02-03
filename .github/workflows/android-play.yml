@@ -37,41 +37,48 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # Track selection:
-      # - master -> internal
-      # - release/* -> closed
-      # - vX.Y.Z tag -> production
-      - name: Set RELEASE_TRACK
+      - name: Versioning and Track Logic
         shell: bash
         run: |
           set -euo pipefail
-          track="internal"
           
+          # 1. Základní nastavení
+          TRACK="internal"
+          VERSION_NAME_TO_SET=""
+          
+          # 2. Rozlišení kontextu podle GITHUB_REF
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            track="production"
-            echo "VERSION_NAME=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_ENV"
+            TRACK="production"
+            VERSION_NAME_TO_SET=${GITHUB_REF#refs/tags/v}
           elif [[ "${GITHUB_REF}" == refs/heads/release/* ]]; then
-            track="closed"
+            TRACK="alpha"
+            VERSION_NAME_TO_SET=${GITHUB_REF#refs/heads/release/}
+          else
+            TRACK="internal"
+            # Pro master nenasazujeme novou verzi, jen ji můžeme přečíst nebo nechat být
           fi
+
+          # 3. Výpočet versionCode (vždy unikátní pro Play Store)
+          # Použijeme GITHUB_RUN_NUMBER jako základní posun
+          BASE_VC=10000
+          VC=$((BASE_VC + GITHUB_RUN_NUMBER))
           
-          echo "RELEASE_TRACK=${track}" >> "$GITHUB_ENV"
-          echo "Using RELEASE_TRACK=${track}"
-
-      # versionCode bump (Play requires monotonically increasing versionCode)
-      - name: Bump versionCode in build.gradle.kts
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Offset is a safety net so it never collides with existing Play versionCodes
-          VC="$((10000 + GITHUB_RUN_NUMBER))"
-          echo "Setting versionCode to ${VC}"
-
           FILE="app/build.gradle.kts"
-
+          echo "Updating $FILE: Setting versionCode = $VC"
           sed -i -E "s/versionCode[[:space:]]*=[[:space:]]*[0-9]+/versionCode = ${VC}/" "$FILE"
 
-          echo "Resulting line:"
-          grep -n "versionCode" "$FILE" | head -n 5
+          # 4. Zápis versionName jen pokud jsme v tagu nebo release branchi
+          if [ -n "$VERSION_NAME_TO_SET" ]; then
+            echo "Setting versionName = \"$VERSION_NAME_TO_SET\""
+            sed -i -E "s/versionName[[:space:]]*=[[:space:]]*\".*\"/versionName = \"${VERSION_NAME_TO_SET}\"/" "$FILE"
+            echo "VERSION_NAME=${VERSION_NAME_TO_SET}" >> "$GITHUB_ENV"
+          else
+            # Pro master vytáhneme stávající versionName ze souboru, abychom ho měli v env pro Fastlane
+            CURRENT_VN=$(grep "versionName" "$FILE" | sed -E 's/.*=[[:space:]]*"(.*)"/\1/')
+            echo "VERSION_NAME=${CURRENT_VN}" >> "$GITHUB_ENV"
+          fi
+
+          echo "RELEASE_TRACK=${TRACK}" >> "$GITHUB_ENV"
 
       - name: Upload to Play (Fastlane)
         env:
