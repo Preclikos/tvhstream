@@ -46,3 +46,5 @@ _ReSharper*/
 .idea/
 #Nuget packages folder
 packages/
+
+google-services.json

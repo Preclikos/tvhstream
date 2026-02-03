@@ -30,6 +30,10 @@ jobs:
       - name: Create Play service account json
         run: echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
 
+      - name: Decode google-services.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > app/google-services.json
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
