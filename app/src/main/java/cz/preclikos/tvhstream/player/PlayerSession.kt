@@ -52,7 +52,6 @@ class PlayerSession(
 
     @OptIn(UnstableApi::class)
     fun playService(context: Context, serviceId: Int) {
-
         subscriptionId = null
 
         mainScope.launch {
@@ -62,21 +61,15 @@ class PlayerSession(
             val mediaSource = ProgressiveMediaSource.Factory(
                 dataSourceFactory,
                 TvheadendExtractorsFactory()
-            )
-                .createMediaSource(MediaItem.fromUri("htsp://service/$serviceId"))
-
-
+            ).createMediaSource(MediaItem.fromUri("htsp://service/$serviceId"))
 
             p.setMediaSource(mediaSource)
             p.prepare()
-            p.playWhenReady = true // počkáme na subscriptionStart
-
-
+            p.playWhenReady = true
         }
     }
 
     fun stop() {
-
         mainScope.launch {
             player?.let { p ->
                 updateState(p)
@@ -88,7 +81,6 @@ class PlayerSession(
     }
 
     fun release() {
-
         dataSourceFactory.releaseCurrentDataSource()
         mainScope.launch {
             player?.let { p ->
@@ -99,7 +91,6 @@ class PlayerSession(
         }
 
         unsubscribe()
-
     }
 
     private fun unsubscribe() {

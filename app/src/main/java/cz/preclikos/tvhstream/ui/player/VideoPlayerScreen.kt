@@ -116,6 +116,7 @@ fun VideoPlayerScreen(
 
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
     KeepScreenOn(enabled = true)
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -487,21 +488,6 @@ private fun EpgEventEntry.timeRangeText(): String? {
     val s = formatClock(start)
     val e = formatClock(stop)
     return "$s–$e"
-}
-
-private fun EpgEventEntry.elapsedRemainingText(nowSec: Long): String? {
-    val dur = (stop - start).coerceAtLeast(1L)
-    val elapsed = (nowSec - start).coerceAtLeast(0L)
-    val remaining = (stop - nowSec).coerceAtLeast(0L)
-
-    return "${formatMinutes(elapsed)}/${formatMinutes(dur)} • -${formatMinutes(remaining)}"
-}
-
-private fun formatMinutes(sec: Long): String {
-    val m = (sec / 60).toInt()
-    val h = m / 60
-    val mm = m % 60
-    return if (h > 0) "${h}h ${mm}m" else "${mm}m"
 }
 
 private val clockFormatter: DateTimeFormatter =

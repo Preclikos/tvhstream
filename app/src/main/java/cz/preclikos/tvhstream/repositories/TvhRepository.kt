@@ -5,6 +5,8 @@ import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.htsp.HtspEvent
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
+import cz.preclikos.tvhstream.services.StatusService
+import cz.preclikos.tvhstream.services.StatusSlot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -21,13 +23,21 @@ import kotlinx.coroutines.withTimeout
 
 class TvhRepository(
     private val htsp: HtspService,
-    private val ioDispatcher: CoroutineDispatcher
+    ioDispatcher: CoroutineDispatcher,
+    private val statusService: StatusService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
-    private val _status = MutableStateFlow("Disconnected")
-    val status: StateFlow<String> = _status
-    fun setStatus(text: String) { _status.value = text }
+    private var lastStatusMs = 0L
+    private fun setStatusThrottled(text: String, minIntervalMs: Long = 700L) {
+        val now = System.currentTimeMillis()
+        if (now - lastStatusMs >= minIntervalMs) {
+            lastStatusMs = now
+            statusService.set(StatusSlot.EPG, text)
+        }
+    }
+
+    private fun setStatus(text: String) = statusService.set(StatusSlot.SYNC, text)
 
     private data class ChannelEntry(
         val id: Int,
@@ -46,6 +56,7 @@ class TvhRepository(
         epgByChannel.getOrPut(channelId) { MutableStateFlow(emptyList()) }
 
     private enum class EpgSnapshotState { NOT_LOADED, LOADED }
+
     private val epgSnapshotState = mutableMapOf<Int, EpgSnapshotState>()
     private val epgSnapshotInFlight = mutableSetOf<Int>()
 
@@ -53,7 +64,8 @@ class TvhRepository(
 
     private var epgBackfillJob: Job? = null
 
-    @Volatile private var started = false
+    @Volatile
+    private var started = false
 
     fun startIfNeeded() {
         if (started) return
@@ -64,23 +76,25 @@ class TvhRepository(
                 when (e) {
                     is HtspEvent.ServerMessage -> handleServerMessage(e.msg)
                     is HtspEvent.ConnectionError -> {
-                        stopEpgSnapshotWorker()
-                        setStatus("Error: ${e.error.message ?: e.error}")
+                        scope.launch {
+                            onDisconnected()
+                            setStatus("Disconnected: ${e.error.message ?: e.error}")
+                        }
                     }
                 }
             }
         }
     }
 
-    /**
-     * Zavolej před každým novým connectem / reconnectem.
-     * Vyčistí stav a resetne barrier.
-     */
+    suspend fun onDisconnected() {
+        stopEpgSnapshotWorker()
+        onNewConnectionStarting() // reset dat + barrier
+    }
+
     suspend fun onNewConnectionStarting() {
         stateMutex.withLock {
             channelMap.clear()
             _channelsUi.value = emptyList()
-
 
             epgByChannel.clear()
             epgSnapshotState.clear()
@@ -104,9 +118,13 @@ class TvhRepository(
         if (epgBackfillJob?.isActive == true) return
 
         epgBackfillJob = scope.launch {
+            setStatus("EPG loading…")
+
             while (isActive) {
                 val targets = stateMutex.withLock { pickChannelsNeedingSnapshotLocked(batchSize) }
                 if (targets.isEmpty()) {
+                    val (done, total) = stateMutex.withLock { epgProgressLocked() }
+                    if (total > 0 && done >= total) setStatus("EPG ready: $done/$total")
                     delay(5_000)
                     continue
                 }
@@ -119,10 +137,15 @@ class TvhRepository(
                 for (chId in targets) {
                     if (!isActive) break
                     if (fetchEpgSnapshotOnce(chId, fromSec, toSec)) ok++
-                    delay(150) // jemné “neDDOS”
+                    delay(350) // jemné “neDDOS”
                 }
 
-                setStatus("EPG snapshot: $ok/${targets.size}")
+                val (done, total) = stateMutex.withLock { epgProgressLocked() }
+
+                setStatusThrottled(
+                    "EPG: $done/$total (batch $ok/${targets.size})",
+                    minIntervalMs = 1_000
+                )
                 delay(intervalMs)
             }
         }
@@ -175,7 +198,7 @@ class TvhRepository(
 
         val sortedIds = channelMap.values
             .sortedWith(
-                compareBy<ChannelEntry>(
+                compareBy(
                     { it.number == null },
                     { it.number ?: Int.MAX_VALUE },
                     { it.name.lowercase() },
@@ -203,10 +226,12 @@ class TvhRepository(
             "channelDelete" -> stateMutex.withLock { handleChannelDeleteLocked(msg) }
 
             "initialSyncCompleted" -> {
-                stateMutex.withLock {
+                val count = stateMutex.withLock {
                     publishChannelsLocked()
                     if (!channelsReadyDef.isCompleted) channelsReadyDef.complete(Unit)
+                    channelMap.size
                 }
+                setStatus("Channels ready: $count")
             }
 
             "eventAdd", "eventUpdate" -> stateMutex.withLock { handleEventUpsertLocked(msg) }
@@ -214,6 +239,11 @@ class TvhRepository(
         }
     }
 
+    private fun epgProgressLocked(): Pair<Int, Int> {
+        val total = channelMap.size
+        val done = epgSnapshotState.values.count { it == EpgSnapshotState.LOADED }
+        return done to total
+    }
 
     private fun handleChannelLocked(msg: HtspMessage) {
         when (msg.method) {
@@ -232,6 +262,7 @@ class TvhRepository(
                 if (epgSnapshotState[id] == null) epgSnapshotState[id] = EpgSnapshotState.NOT_LOADED
 
                 publishChannelsLocked()
+                setStatusThrottled("Syncing channels… ${channelMap.size}")
             }
 
             "channelUpdate" -> {
@@ -249,8 +280,10 @@ class TvhRepository(
 
                 channelMap[id] = existing.copy(name = newName, number = newNumber)
                 publishChannelsLocked()
+                setStatusThrottled("Syncing channels… ${channelMap.size}")
             }
         }
+
     }
 
     private fun handleChannelDeleteLocked(msg: HtspMessage) {
@@ -268,7 +301,7 @@ class TvhRepository(
     private fun publishChannelsLocked() {
         val sorted = channelMap.values
             .sortedWith(
-                compareBy<ChannelEntry>(
+                compareBy(
                     { it.number == null },
                     { it.number ?: Int.MAX_VALUE },
                     { it.name.lowercase() },
@@ -278,7 +311,6 @@ class TvhRepository(
             .map { ChannelUi(it.id, formatName(it)) }
 
         _channelsUi.value = sorted
-        setStatus("Channels: ${sorted.size}")
     }
 
     private fun formatName(c: ChannelEntry): String =
@@ -344,14 +376,6 @@ class TvhRepository(
             .filter { it.stop >= from && it.start <= to }
             .sortedBy { it.start }
             .toList()
-    }
-
-
-    fun ingestGetEventsReply(reply: HtspMessage) {
-
-        scope.launch {
-            stateMutex.withLock { ingestGetEventsReplyLocked(reply) }
-        }
     }
 
     private fun ingestGetEventsReplyLocked(reply: HtspMessage) {

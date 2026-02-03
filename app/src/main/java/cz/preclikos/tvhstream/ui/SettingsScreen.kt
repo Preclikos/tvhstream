@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
@@ -128,7 +127,8 @@ fun PasswordField(
     var passwordVisible by remember { mutableStateOf(false) }
 
     val icon = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility
-    val desc = stringResource(if (passwordVisible) R.string.hide_password else R.string.show_password)
+    val desc =
+        stringResource(if (passwordVisible) R.string.hide_password else R.string.show_password)
 
     OutlinedTextField(
         value = value,

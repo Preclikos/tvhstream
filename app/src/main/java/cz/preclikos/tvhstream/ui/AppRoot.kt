@@ -1,11 +1,14 @@
 package cz.preclikos.tvhstream.ui
 
+import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -30,9 +33,19 @@ object Routes {
 @Composable
 fun AppRoot() {
     val nav = rememberNavController()
+    val context = LocalContext.current
+    val activity = context as? Activity
 
     val appVm: AppConnectionViewModel = koinViewModel()
     val status by appVm.status.collectAsState()
+
+    BackHandler {
+        if (nav.currentBackStackEntry?.destination?.route == Routes.CHANNELS) {
+            activity?.finish()
+        } else {
+            nav.popBackStack()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         NavHost(
