@@ -6,14 +6,20 @@ platform :android do
       UI.user_error!("Missing env var #{k}") unless ENV[k] && !ENV[k].empty?
     end
 
+    build_code = (ENV["GITHUB_RUN_NUMBER"] || "1").to_i
+
     gradle(
       task: "clean bundleRelease",
       properties: {
+        # signing
         "android.injected.signing.store.file" => ENV["KEYSTORE_PATH"],
         "android.injected.signing.store.password" => ENV["ANDROID_KEYSTORE_PASSWORD"],
         "android.injected.signing.key.alias" => ENV["ANDROID_KEY_ALIAS"],
-        "android.injected.signing.key.password" => ENV["ANDROID_KEY_PASSWORD"]
-      }
+        "android.injected.signing.key.password" => ENV["ANDROID_KEY_PASSWORD"],
+
+        # versions
+        "versionCode" => build_code,
+      }.compact
     )
 
     supply(
