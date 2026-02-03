@@ -1,0 +1,13 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build and upload to Play internal track"
+  lane :deploy_internal do
+    gradle(task: "clean bundleRelease")
+
+    supply(
+      track: "internal",
+      aab: "../app/build/outputs/bundle/release/app-release.aab"
+    )
+  end
+end
