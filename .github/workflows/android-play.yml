@@ -28,6 +28,9 @@ jobs:
         run: |
           echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Upload to Play (Fastlane supply)
         env:
           SUPPLY_JSON_KEY: ${{ github.workspace }}/play-service-account.json
