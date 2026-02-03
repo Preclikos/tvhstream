@@ -75,12 +75,7 @@ class TvhRepository(
             htsp.events.collect { e ->
                 when (e) {
                     is HtspEvent.ServerMessage -> handleServerMessage(e.msg)
-                    is HtspEvent.ConnectionError -> {
-                        scope.launch {
-                            onDisconnected()
-                            setStatus("Disconnected: ${e.error.message ?: e.error}")
-                        }
-                    }
+                    is HtspEvent.ConnectionError -> {}
                 }
             }
         }
@@ -88,7 +83,7 @@ class TvhRepository(
 
     suspend fun onDisconnected() {
         stopEpgSnapshotWorker()
-        onNewConnectionStarting() // reset dat + barrier
+        onNewConnectionStarting()
     }
 
     suspend fun onNewConnectionStarting() {

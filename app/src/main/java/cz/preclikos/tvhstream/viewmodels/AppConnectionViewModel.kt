@@ -58,6 +58,7 @@ class AppConnectionViewModel(
             htsp.events.collectLatest { e ->
                 if (e is HtspEvent.ConnectionError) {
                     statusService.set(StatusSlot.CONNECTION, "Disconnected. Reconnecting…")
+                    repo.onDisconnected()
                     startOrRestartReconnectLoop()
                 }
             }
@@ -71,11 +72,9 @@ class AppConnectionViewModel(
             while (true) {
                 val cfg = lastCfg ?: return@launch
 
-                // zkus connect
                 val ok = connectInternal(cfg.host, cfg.port, cfg.username, cfg.password)
                 if (ok) return@launch
 
-                // nevyšlo -> počkej 5s a zkus znovu
                 statusService.set(StatusSlot.CONNECTION, "Reconnect in 5s…")
                 kotlinx.coroutines.delay(5_000)
             }
