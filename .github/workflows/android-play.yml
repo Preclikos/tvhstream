@@ -28,22 +28,6 @@ jobs:
         run: |
           echo '${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}' > play-service-account.json
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      - name: Build (Gradle)
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/upload.jks
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          ./gradlew --no-daemon clean bundleRelease \
-            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
-            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
-            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
-
       - name: Upload to Play (Fastlane supply)
         env:
           SUPPLY_JSON_KEY: ${{ github.workspace }}/play-service-account.json

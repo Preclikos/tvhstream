@@ -7,7 +7,7 @@ platform :android do
 
     supply(
       track: "internal",
-      aab: "../app/build/outputs/bundle/release/app-release.aab"
+      aab: "app/build/outputs/bundle/release/app-release.aab"
     )
   end
 end
