@@ -21,6 +21,7 @@ import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import kotlin.system.exitProcess
 
 object Routes {
     const val CHANNELS = "channels"
@@ -41,7 +42,8 @@ fun AppRoot() {
 
     BackHandler {
         if (nav.currentBackStackEntry?.destination?.route == Routes.CHANNELS) {
-            activity?.finish()
+            activity?.finishAffinity()
+            exitProcess(0)
         } else {
             nav.popBackStack()
         }
