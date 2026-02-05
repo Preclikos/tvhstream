@@ -78,6 +78,39 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "35.0.0"
 
+      - name: Keep only latest 10 release branches
+        if: github.ref_type == 'branch'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Fetching all release branches..."
+          git fetch origin "+refs/heads/release/*:refs/remotes/origin/release/*"
+
+          # Get release branches sorted by last commit date (newest first)
+          mapfile -t BRANCHES < <(
+            git for-each-ref \
+              --sort=-committerdate \
+              --format='%(refname:short)' \
+              refs/remotes/origin/release/ | sed 's|origin/||'
+          )
+
+          echo "Found ${#BRANCHES[@]} release branches"
+
+          # Keep only latest 10
+          KEEP=10
+
+          if [ "${#BRANCHES[@]}" -le "$KEEP" ]; then
+            echo "Nothing to delete. <= $KEEP branches exist."
+            exit 0
+          fi
+
+          for ((i=KEEP; i<${#BRANCHES[@]}; i++)); do
+            BRANCH="${BRANCHES[$i]}"
+            echo "Deleting old release branch: $BRANCH"
+            git push origin --delete "$BRANCH"
+          done
+
       - name: Delete older GitHub releases (keep latest 1)
         uses: dev-drprasad/delete-older-releases@v0.3.4
         with:
