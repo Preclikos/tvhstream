@@ -24,8 +24,13 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Decode keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > upload.jks
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          targetSdk: '35'
+      
+      - name: Install BuildTools
+        run: sdkmanager --install "build-tools;35.0.0"
 
       - name: Decode google-services.json
         run: |
@@ -57,27 +62,21 @@ jobs:
           echo "RELEASE_TAG=v${VERSION_NAME_TO_SET}" >> "$GITHUB_ENV"
 
       # These env vars are commonly used by Gradle signingConfigs (you wire them in build.gradle.kts)
-      - name: Build signed Release APK
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/upload.jks
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Build Release APK
         run: |
           ./gradlew clean assembleRelease
 
-      - name: Locate APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK_PATH="app/release/app-release.apk"
-          if [[ ! -f "$APK_PATH" ]]; then
-            echo "APK not found at $APK_PATH"
-            find app/build/outputs -type f | sed -n '1,200p'
-            exit 1
-          fi
-          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
-          echo "Found APK: $APK_PATH"
+      - uses: r0adkll/sign-android-release@v1
+        name: Sign TvPlayer APK
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "35.0.0"
 
       - name: Delete older GitHub releases (keep latest 1)
         uses: dev-drprasad/delete-older-releases@v0.3.4
@@ -96,6 +95,6 @@ jobs:
           generate_release_notes: true
           make_latest: false
           files: |
-            ${{ env.APK_PATH }}
+            ${{ steps.sign_app.outputs.signedReleaseFile }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
