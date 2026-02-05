@@ -1,0 +1,101 @@
+name: Build APK + GitHub Release (release branches only)
+
+on:
+  push:
+    branches:
+      - "release/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build_release_apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Decode keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > upload.jks
+
+      - name: Decode google-services.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > app/google-services.json
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Versioning (release branch -> versionName)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Expect refs/heads/release/x.y.z
+          VERSION_NAME_TO_SET="${GITHUB_REF#refs/heads/release/}"
+
+          # Unique versionCode for Android
+          BASE_VC=10000
+          VC=$((BASE_VC + GITHUB_RUN_NUMBER))
+
+          FILE="app/build.gradle.kts"
+          echo "Updating $FILE: versionCode=$VC, versionName=$VERSION_NAME_TO_SET"
+
+          sed -i -E "s/versionCode[[:space:]]*=[[:space:]]*[0-9]+/versionCode = ${VC}/" "$FILE"
+          sed -i -E "s/versionName[[:space:]]*=[[:space:]]*\".*\"/versionName = \"${VERSION_NAME_TO_SET}\"/" "$FILE"
+
+          echo "VERSION_NAME=${VERSION_NAME_TO_SET}" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=${VC}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${VERSION_NAME_TO_SET}" >> "$GITHUB_ENV"
+
+      # These env vars are commonly used by Gradle signingConfigs (you wire them in build.gradle.kts)
+      - name: Build signed Release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew clean assembleRelease
+
+      - name: Locate APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "$APK_PATH" ]]; then
+            echo "APK not found at $APK_PATH"
+            find app/build/outputs -type f | sed -n '1,200p'
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+          echo "Found APK: $APK_PATH"
+
+      - name: Delete older GitHub releases (keep latest 1)
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        with:
+          keep_latest: 1
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create/Update GitHub Release and upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          prerelease: true
+          generate_release_notes: true
+          make_latest: false
+          files: |
+            ${{ env.APK_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

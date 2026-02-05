@@ -104,3 +104,13 @@ data class EpgEventEntry(
     val title: String,
     val summary: String? = null
 )
+
+data class SubStatus(
+    val id: Int,
+    val serviceName: String? = null,
+    val state: String? = null,   // "Running" / "No input" / "Scrambled" / ...
+    val errors: Int? = null,
+    val input: String? = null,
+    val username: String? = null,
+    val hostname: String? = null,
+)

@@ -3,7 +3,9 @@ package cz.preclikos.tvhstream.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cz.preclikos.tvhstream.htsp.HtspEvent
+import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
+import cz.preclikos.tvhstream.htsp.SubStatus
 import cz.preclikos.tvhstream.repositories.TvhRepository
 import cz.preclikos.tvhstream.services.StatusService
 import cz.preclikos.tvhstream.services.StatusSlot
@@ -25,6 +27,7 @@ class AppConnectionViewModel(
 
     val channels = repo.channelsUi
     val status = statusService.headline
+
     private data class ServerCfg(
         val host: String,
         val port: Int,
@@ -32,7 +35,8 @@ class AppConnectionViewModel(
         val password: String
     )
 
-    @Volatile private var lastCfg: ServerCfg? = null
+    @Volatile
+    private var lastCfg: ServerCfg? = null
     private var reconnectJob: Job? = null
     private var autoJob: Job? = null
 
@@ -56,13 +60,92 @@ class AppConnectionViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             htsp.events.collectLatest { e ->
-                if (e is HtspEvent.ConnectionError) {
-                    statusService.set(StatusSlot.CONNECTION, "Disconnected. Reconnecting…")
-                    repo.onDisconnected()
-                    startOrRestartReconnectLoop()
+                when (e) {
+                    is HtspEvent.ConnectionError -> {
+                        statusService.set(StatusSlot.CONNECTION, "Disconnected. Reconnecting…")
+                        repo.onDisconnected()
+                        startOrRestartReconnectLoop()
+                    }
+                    // pokud je to přímo HtspMessage jako event:
+                    is HtspEvent.ServerMessage -> {
+                        val msg = e.msg
+
+                        msg.toSubStatusOrNull()?.let { st ->
+                            subs[st.id] = st
+                            publishSubsStatus()
+                            return@collectLatest
+                        }
+
+                        msg.subStopIdOrNull()?.let { id ->
+                            subs.remove(id)
+                            publishSubsStatus()
+                            return@collectLatest
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private val subs = mutableMapOf<Int, SubStatus>()
+
+    private fun publishSubsStatus() {
+        val msg = subs.values.computeUiStatus()
+        if (msg == null) statusService.set(StatusSlot.CONNECTION, null)
+        else statusService.set(StatusSlot.CONNECTION, msg)
+    }
+
+
+    private fun HtspMessage.toSubStatusOrNull(): SubStatus? {
+        val m = method ?: return null
+        if (m != "subscriptionStatus" && m != "subscriptionStart") return null
+
+        val id = int("subscriptionId")
+            ?: int("id")
+            ?: return null
+
+        return SubStatus(
+            id = id,
+            serviceName = str("serviceName") ?: str("channelName") ?: str("service"),
+            state = str("state") ?: str("status"),
+            errors = int("errors") ?: int("signalErrors") ?: int("ccErrors"),
+            input = str("input") ?: str("adapter") ?: str("tuner"),
+            username = str("username"),
+            hostname = str("hostname"),
+        )
+    }
+
+    private fun HtspMessage.subStopIdOrNull(): Int? {
+        val m = method ?: return null
+        if (m != "subscriptionStop") return null
+        return int("subscriptionId") ?: int("id")
+    }
+
+    private fun Collection<SubStatus>.computeUiStatus(): String? {
+        if (isEmpty()) return null
+
+        val noInput = firstOrNull { s ->
+            s.state.equals("No input", ignoreCase = true) || s.input.isNullOrBlank()
+        }
+        if (noInput != null) {
+            val svc = noInput.serviceName ?: "channel"
+            return "No free tuner / no input ($svc)"
+        }
+
+        val scrambled = firstOrNull { it.state.equals("Scrambled", ignoreCase = true) }
+        if (scrambled != null) {
+            val svc = scrambled.serviceName ?: "channel"
+            return "Channel is scrambled ($svc)"
+        }
+
+        val worst = maxByOrNull { it.errors ?: 0 }
+        val err = worst?.errors ?: 0
+        if (err > 0) {
+            val svc = worst?.serviceName ?: "channel"
+            return "Signal errors: $err ($svc)"
+        }
+
+        return null
     }
 
     private fun startOrRestartReconnectLoop() {

@@ -29,7 +29,7 @@ import kotlin.math.min
 import kotlin.text.Charsets.UTF_8
 
 class HtspService(
-    private val ioDispatcher: CoroutineDispatcher
+    ioDispatcher: CoroutineDispatcher
 ) {
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
