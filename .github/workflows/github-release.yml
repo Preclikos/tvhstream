@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          APK_PATH="app/release/app-release.apk"
           if [[ ! -f "$APK_PATH" ]]; then
             echo "APK not found at $APK_PATH"
             find app/build/outputs -type f | sed -n '1,200p'
