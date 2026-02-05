@@ -9,6 +9,7 @@
 
     <string name="options">Options</string>
     <string name="no_epg">No EPG</string>
+    <string name="epg_next">Next %1$s</string>
     <string name="select_channel_hint">Select a channel on the left to see details.</string>
 
     <!-- EPG detail line -->

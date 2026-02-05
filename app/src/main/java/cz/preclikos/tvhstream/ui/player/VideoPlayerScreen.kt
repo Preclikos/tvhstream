@@ -70,6 +70,7 @@ import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.delay
+import org.koin.androidx.compose.koinViewModel
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -92,7 +93,7 @@ val bottomGradient = Brush.verticalGradient(
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
-    vm: VideoPlayerViewModel,
+    videoPlayerViewModel: VideoPlayerViewModel = koinViewModel(),
     channelId: Int,
     channelName: String,
     serviceId: Int,
@@ -101,13 +102,13 @@ fun VideoPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val ctx = LocalContext.current
-    val player = remember { vm.getPlayerInstance(ctx) }
+    val player = remember { videoPlayerViewModel.getPlayerInstance(ctx) }
 
     DisposableEffect(lifecycleOwner, serviceId) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> vm.playService(ctx, serviceId)
-                Lifecycle.Event.ON_STOP -> vm.stop()
+                Lifecycle.Event.ON_START -> videoPlayerViewModel.playService(ctx, serviceId)
+                Lifecycle.Event.ON_STOP -> videoPlayerViewModel.stop()
                 else -> Unit
             }
         }
@@ -140,7 +141,7 @@ fun VideoPlayerScreen(
         hideControls()
     }
 
-    val epg by vm.epgForChannel(channelId).collectAsState()
+    val epg by videoPlayerViewModel.epgForChannel(channelId).collectAsState()
 
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
     LaunchedEffect(Unit) {

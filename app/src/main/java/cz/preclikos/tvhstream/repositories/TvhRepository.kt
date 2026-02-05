@@ -20,6 +20,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+
+data class EpgCoverage(
+    var coveredFrom: Long = Long.MAX_VALUE,  // earliest event.start we have
+    var coveredTo: Long = 0L,                // latest event.stop we have
+    var lastRefreshSec: Long = 0L            // last time we asked server for this channel
+)
 
 class TvhRepository(
     private val htsp: HtspService,
@@ -28,21 +37,81 @@ class TvhRepository(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
+    // ---------------------------
+    // Tunables (your requested behavior)
+    // ---------------------------
+
+    /**
+     * Fast start: fill a small window quickly so UI is usable right away.
+     */
+    private val warmupFutureSec = 4 * 3600L
+
+    /**
+     * After warmup, keep at least this much future ahead (top-up when below).
+     */
+    private val steadyMinFutureSec = 20 * 3600L
+
+    /**
+     * Try to keep up to this much future (cap) so cache doesn't balloon.
+     */
+    private val steadyMaxFutureSec = 24 * 3600L
+
+    /**
+     * Each top-up extends horizon by this much (per request).
+     * (Keep it moderate so you don't DDOS tvheadend.)
+     */
+    private val topUpChunkSec = 4 * 3600L
+
+    /**
+     * How much past we retain in cache (for "now/prev" and seeking).
+     */
+    private val keepPastSec = 6 * 3600L
+
+    /**
+     * How much future we retain in cache (should be >= steadyMaxFutureSec).
+     */
+    private val keepFutureSec = steadyMaxFutureSec
+
+    /**
+     * Overlap when extending horizon to avoid boundary gaps.
+     */
+    private val horizonOverlapSec = 10 * 60L
+
+    /**
+     * Don't refresh same channel too often (prevents spinning).
+     */
+    private val perChannelCooldownSec = 10 * 60L
+
+    // Worker pacing
+    private val requestDelayMs = 250L
+    private val idleDelayMs = 3_000L
+
+    // ---------------------------
+    // Status helpers
+    // ---------------------------
+
     private var lastStatusMs = 0L
-    private fun setStatusThrottled(text: String, minIntervalMs: Long = 700L) {
+    private fun setStatusThrottled(text: String, slot: StatusSlot = StatusSlot.EPG, minIntervalMs: Long = 700L) {
         val now = System.currentTimeMillis()
         if (now - lastStatusMs >= minIntervalMs) {
             lastStatusMs = now
-            statusService.set(StatusSlot.EPG, text)
+            statusService.set(slot, text)
         }
     }
 
-    private fun setStatus(text: String) = statusService.set(StatusSlot.SYNC, text)
+    private fun setStatus(text: String, slot: StatusSlot = StatusSlot.SYNC) {
+        statusService.set(slot, text)
+    }
+
+    // ---------------------------
+    // Channels
+    // ---------------------------
 
     private data class ChannelEntry(
         val id: Int,
         val name: String,
-        val number: Int?
+        val number: Int?,
+        val icon: String?
     )
 
     private val channelMap = linkedMapOf<Int, ChannelEntry>()
@@ -51,21 +120,32 @@ class TvhRepository(
 
     private var channelsReadyDef = CompletableDeferred<Unit>()
 
+    // ---------------------------
+    // EPG store
+    // ---------------------------
+
     private val epgByChannel = mutableMapOf<Int, MutableStateFlow<List<EpgEventEntry>>>()
     fun epgForChannel(channelId: Int): StateFlow<List<EpgEventEntry>> =
         epgByChannel.getOrPut(channelId) { MutableStateFlow(emptyList()) }
 
-    private enum class EpgSnapshotState { NOT_LOADED, LOADED }
+    /**
+     * Coverage is what replaces "NOT_LOADED/LOADED".
+     * We use it to maintain a sliding horizon.
+     */
+    private val epgCoverage = mutableMapOf<Int, EpgCoverage>()
 
-    private val epgSnapshotState = mutableMapOf<Int, EpgSnapshotState>()
-    private val epgSnapshotInFlight = mutableSetOf<Int>()
+    /**
+     * Prevent parallel duplicate requests per channel.
+     */
+    private val epgInFlight = mutableSetOf<Int>()
 
     private val stateMutex = Mutex()
 
-    private var epgBackfillJob: Job? = null
+    // Worker
+    private var epgWorkerJob: Job? = null
 
-    @Volatile
-    private var started = false
+    // Lifecycle
+    @Volatile private var started = false
 
     fun startIfNeeded() {
         if (started) return
@@ -75,14 +155,16 @@ class TvhRepository(
             htsp.events.collect { e ->
                 when (e) {
                     is HtspEvent.ServerMessage -> handleServerMessage(e.msg)
-                    is HtspEvent.ConnectionError -> {}
+                    is HtspEvent.ConnectionError -> {
+                        // no-op: your outer code calls onDisconnected()
+                    }
                 }
             }
         }
     }
 
     suspend fun onDisconnected() {
-        stopEpgSnapshotWorker()
+        stopEpgWorker()
         onNewConnectionStarting()
     }
 
@@ -92,8 +174,8 @@ class TvhRepository(
             _channelsUi.value = emptyList()
 
             epgByChannel.clear()
-            epgSnapshotState.clear()
-            epgSnapshotInFlight.clear()
+            epgCoverage.clear()
+            epgInFlight.clear()
 
             channelsReadyDef = CompletableDeferred()
         }
@@ -103,74 +185,122 @@ class TvhRepository(
         withTimeout(timeoutMs) { channelsReadyDef.await() }
     }
 
+    // ---------------------------
+    // EPG Worker (warmup -> steady sliding horizon)
+    // ---------------------------
 
-    fun startEpgSnapshotWorker(
-        batchSize: Int = 5,
-        intervalMs: Long = 2_000,
-        windowPastSec: Long = 2 * 3600,
-        windowFutureSec: Long = 12 * 3600
+    /**
+     * Starts an EPG worker that:
+     *  - warmup: fill ~4h future quickly for all channels
+     *  - steady: keep future horizon between 20–24h by periodic top-ups
+     *
+     * You can call this after initialSyncCompleted (or whenever channels are ready).
+     */
+    fun startEpgWorker(
+        batchSize: Int = 6,
+        intervalMs: Long = 1_500L
     ) {
-        if (epgBackfillJob?.isActive == true) return
+        if (epgWorkerJob?.isActive == true) return
 
-        epgBackfillJob = scope.launch {
-            setStatus("EPG loading…")
+        epgWorkerJob = scope.launch {
+            setStatus("EPG loading…", StatusSlot.EPG)
 
             while (isActive) {
-                val targets = stateMutex.withLock { pickChannelsNeedingSnapshotLocked(batchSize) }
-                if (targets.isEmpty()) {
-                    val (done, total) = stateMutex.withLock { epgProgressLocked() }
-                    if (total > 0 && done >= total) setStatus("EPG ready: $done/$total")
-                    delay(5_000)
-                    continue
+                val nowSec = nowSec()
+
+                val targets = stateMutex.withLock {
+                    pickChannelsNeedingTopUpLocked(
+                        nowSec = nowSec,
+                        limit = batchSize
+                    )
                 }
 
-                val nowSec = System.currentTimeMillis() / 1000L
-                val fromSec = nowSec - windowPastSec
-                val toSec = nowSec + windowFutureSec
+                if (targets.isEmpty()) {
+                    val (warmDone, total) = stateMutex.withLock { warmupProgressLocked(nowSec) }
+                    if (total > 0 && warmDone >= total) {
+                        setStatusThrottled("EPG steady (warmup $warmDone/$total)", StatusSlot.EPG, minIntervalMs = 2_000)
+                    } else if (total > 0) {
+                        setStatusThrottled("EPG warmup $warmDone/$total", StatusSlot.EPG, minIntervalMs = 1_000)
+                    }
+                    delay(idleDelayMs)
+                    continue
+                }
 
                 var ok = 0
                 for (chId in targets) {
                     if (!isActive) break
-                    if (fetchEpgSnapshotOnce(chId, fromSec, toSec)) ok++
-                    delay(350) // jemné “neDDOS”
+                    val did = fetchEpgTopUpOnce(channelId = chId, nowSec = nowSec)
+                    if (did) ok++
+                    delay(requestDelayMs)
                 }
 
-                val (done, total) = stateMutex.withLock { epgProgressLocked() }
-
+                val (warmDone, total) = stateMutex.withLock { warmupProgressLocked(nowSec) }
                 setStatusThrottled(
-                    "EPG: $done/$total (batch $ok/${targets.size})",
+                    "EPG: warmup $warmDone/$total (batch $ok/${targets.size})",
+                    StatusSlot.EPG,
                     minIntervalMs = 1_000
                 )
+
                 delay(intervalMs)
             }
         }
     }
 
-    fun stopEpgSnapshotWorker() {
-        epgBackfillJob?.cancel()
-        epgBackfillJob = null
+    fun stopEpgWorker() {
+        epgWorkerJob?.cancel()
+        epgWorkerJob = null
     }
 
-    private suspend fun fetchEpgSnapshotOnce(
-        channelId: Int,
-        fromSec: Long,
-        toSec: Long
-    ): Boolean {
-
+    /**
+     * Decides how far we should fetch for a channel right now.
+     * Uses a sliding horizon:
+     *  - if channel isn't warmed up, aim for now+warmupFuture
+     *  - else keep horizon >= now+steadyMinFuture, extending in chunks up to steadyMaxFuture
+     */
+    private suspend fun fetchEpgTopUpOnce(channelId: Int, nowSec: Long): Boolean {
+        // reserve channel
         stateMutex.withLock {
-            val st = epgSnapshotState[channelId] ?: EpgSnapshotState.NOT_LOADED
-            if (st == EpgSnapshotState.LOADED) return false
-            if (!epgSnapshotInFlight.add(channelId)) return false
+            if (!epgInFlight.add(channelId)) return false
+            epgCoverage.getOrPut(channelId) { EpgCoverage() }
         }
 
         try {
+            val desiredMaxTo = nowSec + steadyMaxFutureSec
+            val desiredWarmTo = nowSec + warmupFutureSec
+            val desiredMinTo = nowSec + steadyMinFutureSec
+
+            val targetTo: Long = stateMutex.withLock {
+                val cov = epgCoverage[channelId] ?: EpgCoverage()
+
+                // Cooldown check (avoid hammering same channel)
+                if (nowSec - cov.lastRefreshSec < perChannelCooldownSec) return false
+
+                val currentTo = cov.coveredTo
+
+                // Warmup phase for this channel?
+                if (currentTo < desiredWarmTo) {
+                    min(desiredWarmTo, desiredMaxTo)
+                } else {
+                    // Steady phase: if below min future, extend by chunk, capped to max
+                    if (currentTo < desiredMinTo) {
+                        min(currentTo + topUpChunkSec, desiredMaxTo)
+                    } else {
+                        // already good
+                        return false
+                    }
+                }
+            }
+
+            // If we're here, we want to fetch up to targetTo.
+            // Use epgMaxTime (HTSP v6+). It’s a Unix timestamp (seconds).
             val reply = runCatching {
                 htsp.request(
                     method = "getEvents",
                     fields = mapOf(
                         "channelId" to channelId,
-                        "start" to fromSec,
-                        "stop" to toSec
+                        "epgMaxTime" to (targetTo),
+                        // optional helpers if your server/client supports them:
+                        // "numFollowing" to 200
                     ),
                     timeoutMs = 20_000
                 )
@@ -179,44 +309,69 @@ class TvhRepository(
             if (reply.fields.containsKey("error")) return false
 
             stateMutex.withLock {
-                ingestGetEventsReplyLocked(reply)
-                epgSnapshotState[channelId] = EpgSnapshotState.LOADED
+                // ingest + update coverage from reply
+                val ingest = ingestGetEventsReplyLocked(reply, nowSec = nowSec)
+                // mark refresh time even if ingest returned 0 (so we don't spin)
+                epgCoverage.getOrPut(channelId) { EpgCoverage() }.lastRefreshSec = nowSec
+
+                // Aggressive trimming pass (keeps cache in bounds)
+                trimAllEpgLocked(nowSec)
+                return ingest.totalEvents > 0 || true
             }
-            return true
         } finally {
-            stateMutex.withLock { epgSnapshotInFlight.remove(channelId) }
+            stateMutex.withLock { epgInFlight.remove(channelId) }
         }
     }
 
-    private fun pickChannelsNeedingSnapshotLocked(limit: Int): List<Int> {
+    /**
+     * Pick channels that either:
+     *  - are not warmed up (coveredTo < now+warmupFuture)
+     *  - or need steady top-up (coveredTo < now+steadyMinFuture)
+     *
+     * Prioritize the ones with the smallest coveredTo first.
+     */
+    private fun pickChannelsNeedingTopUpLocked(nowSec: Long, limit: Int): List<Int> {
         if (channelMap.isEmpty()) return emptyList()
 
+        val wantWarmTo = nowSec + warmupFutureSec
+        val wantMinTo = nowSec + steadyMinFutureSec
+
+        // Order channels by number/name, but select targets by "how far behind horizon they are"
         val sortedIds = channelMap.values
-            .sortedWith(
-                compareBy(
-                    { it.number == null },
-                    { it.number ?: Int.MAX_VALUE },
-                    { it.name.lowercase() },
-                    { it.id }
-                )
-            )
+            .sortedWith(compareBy({ it.number == null }, { it.number ?: Int.MAX_VALUE }, { it.name.lowercase() }, { it.id }))
             .map { it.id }
 
-        val out = ArrayList<Int>(limit)
-        for (id in sortedIds) {
-            val st = epgSnapshotState[id] ?: EpgSnapshotState.NOT_LOADED
-            if (st == EpgSnapshotState.NOT_LOADED && !epgSnapshotInFlight.contains(id)) {
-                out.add(id)
-                if (out.size == limit) break
+        val candidates = sortedIds.asSequence()
+            .filter { id ->
+                if (epgInFlight.contains(id)) return@filter false
+                val cov = epgCoverage.getOrPut(id) { EpgCoverage() }
+                // Needs warmup or steady top-up
+                (cov.coveredTo < wantWarmTo) || (cov.coveredTo < wantMinTo)
             }
-        }
-        return out
+            .sortedBy { id -> epgCoverage[id]?.coveredTo ?: 0L }
+            .take(limit)
+            .toList()
+
+        return candidates
     }
 
+    private fun warmupProgressLocked(nowSec: Long): Pair<Int, Int> {
+        val total = channelMap.size
+        if (total == 0) return 0 to 0
+        val wantWarmTo = nowSec + warmupFutureSec
+        val done = channelMap.keys.count { id ->
+            val cov = epgCoverage[id]
+            cov != null && cov.coveredTo >= wantWarmTo
+        }
+        return done to total
+    }
+
+    // ---------------------------
+    // Server message handling
+    // ---------------------------
 
     private suspend fun handleServerMessage(msg: HtspMessage) {
         when (msg.method) {
-
             "channelAdd", "channelUpdate" -> stateMutex.withLock { handleChannelLocked(msg) }
             "channelDelete" -> stateMutex.withLock { handleChannelDeleteLocked(msg) }
 
@@ -226,18 +381,13 @@ class TvhRepository(
                     if (!channelsReadyDef.isCompleted) channelsReadyDef.complete(Unit)
                     channelMap.size
                 }
-                setStatus("Channels ready: $count")
+                setStatus("Channels ready: $count", StatusSlot.SYNC)
             }
 
+            // Async EPG updates (only when server data changes)
             "eventAdd", "eventUpdate" -> stateMutex.withLock { handleEventUpsertLocked(msg) }
             "eventDelete" -> stateMutex.withLock { handleEventDeleteLocked(msg) }
         }
-    }
-
-    private fun epgProgressLocked(): Pair<Int, Int> {
-        val total = channelMap.size
-        val done = epgSnapshotState.values.count { it == EpgSnapshotState.LOADED }
-        return done to total
     }
 
     private fun handleChannelLocked(msg: HtspMessage) {
@@ -252,12 +402,11 @@ class TvhRepository(
                         ?: msg.int("channelNum")
                         ?: msg.int("channelno")
 
-                channelMap[id] = ChannelEntry(id, name, number)
-
-                if (epgSnapshotState[id] == null) epgSnapshotState[id] = EpgSnapshotState.NOT_LOADED
+                channelMap[id] = ChannelEntry(id, name, number, null)
+                epgCoverage.getOrPut(id) { EpgCoverage() }
 
                 publishChannelsLocked()
-                setStatusThrottled("Syncing channels… ${channelMap.size}")
+                setStatusThrottled("Syncing channels… ${channelMap.size}", StatusSlot.SYNC, minIntervalMs = 700)
             }
 
             "channelUpdate" -> {
@@ -275,10 +424,9 @@ class TvhRepository(
 
                 channelMap[id] = existing.copy(name = newName, number = newNumber)
                 publishChannelsLocked()
-                setStatusThrottled("Syncing channels… ${channelMap.size}")
+                setStatusThrottled("Syncing channels… ${channelMap.size}", StatusSlot.SYNC, minIntervalMs = 700)
             }
         }
-
     }
 
     private fun handleChannelDeleteLocked(msg: HtspMessage) {
@@ -286,23 +434,15 @@ class TvhRepository(
 
         channelMap.remove(id)
         epgByChannel.remove(id)
-
-        epgSnapshotState.remove(id)
-        epgSnapshotInFlight.remove(id)
+        epgCoverage.remove(id)
+        epgInFlight.remove(id)
 
         publishChannelsLocked()
     }
 
     private fun publishChannelsLocked() {
         val sorted = channelMap.values
-            .sortedWith(
-                compareBy(
-                    { it.number == null },
-                    { it.number ?: Int.MAX_VALUE },
-                    { it.name.lowercase() },
-                    { it.id }
-                )
-            )
+            .sortedWith(compareBy({ it.number == null }, { it.number ?: Int.MAX_VALUE }, { it.name.lowercase() }, { it.id }))
             .map { ChannelUi(it.id, formatName(it)) }
 
         _channelsUi.value = sorted
@@ -311,12 +451,24 @@ class TvhRepository(
     private fun formatName(c: ChannelEntry): String =
         if (c.number != null) "${c.number}  ${c.name}" else c.name
 
+    // ---------------------------
+    // Query helpers
+    // ---------------------------
 
     fun nowEvent(channelId: Int, nowSec: Long): EpgEventEntry? {
         val list = epgByChannel[channelId]?.value ?: return null
         return list.firstOrNull { it.start <= nowSec && nowSec < it.stop }
-            ?: list.minByOrNull { kotlin.math.abs(it.start - nowSec) }
+            ?: list.minByOrNull { abs(it.start - nowSec) }
     }
+
+    fun nextEvent(channelId: Int, nowSec: Long): EpgEventEntry? {
+        val list = epgByChannel[channelId]?.value ?: return null
+        return list.firstOrNull { it.start > nowSec }
+    }
+
+    // ---------------------------
+    // Async event handling (updates coverage too)
+    // ---------------------------
 
     private fun handleEventUpsertLocked(msg: HtspMessage) {
         val eventId = msg.int("eventId") ?: msg.int("id") ?: return
@@ -328,14 +480,20 @@ class TvhRepository(
         val start = msg.long("start") ?: msg.long("startTime") ?: return
         val stop = msg.long("stop") ?: msg.long("stopTime") ?: return
 
+        val nowSec = nowSec()
         val flow = epgByChannel.getOrPut(channelId) { MutableStateFlow(emptyList()) }
         flow.value = upsertAndTrim(
             list = flow.value,
             item = EpgEventEntry(eventId, channelId, start, stop, title, summary),
-            nowSec = System.currentTimeMillis() / 1000L,
-            keepPastSec = 2 * 3600,
-            keepFutureSec = 12 * 3600
+            nowSec = nowSec,
+            keepPastSec = keepPastSec,
+            keepFutureSec = keepFutureSec
         )
+
+        // Update coverage
+        val cov = epgCoverage.getOrPut(channelId) { EpgCoverage() }
+        cov.coveredFrom = min(cov.coveredFrom, start)
+        cov.coveredTo = max(cov.coveredTo, stop)
     }
 
     private fun handleEventDeleteLocked(msg: HtspMessage) {
@@ -344,43 +502,31 @@ class TvhRepository(
 
         val flow = epgByChannel[channelId] ?: return
         flow.value = flow.value.filterNot { it.eventId == eventId }
+        // Coverage not strictly recomputed here (not worth it). Worker will top-up if needed.
     }
 
-    private fun upsertAndTrim(
-        list: List<EpgEventEntry>,
-        item: EpgEventEntry,
-        nowSec: Long,
-        keepPastSec: Long,
-        keepFutureSec: Long
-    ): List<EpgEventEntry> {
-        val from = nowSec - keepPastSec
-        val to = nowSec + keepFutureSec
+    // ---------------------------
+    // Ingest getEvents reply + update coverage
+    // ---------------------------
 
-        val replaced = buildList {
-            var found = false
-            for (e in list) {
-                if (e.eventId == item.eventId) {
-                    add(item); found = true
-                } else add(e)
-            }
-            if (!found) add(item)
-        }
+    private data class IngestResult(
+        val totalEvents: Int,
+        val perChannelMinStart: MutableMap<Int, Long>,
+        val perChannelMaxStop: MutableMap<Int, Long>
+    )
 
-        return replaced
-            .asSequence()
-            .filter { it.stop >= from && it.start <= to }
-            .sortedBy { it.start }
-            .toList()
-    }
-
-    private fun ingestGetEventsReplyLocked(reply: HtspMessage) {
+    private fun ingestGetEventsReplyLocked(reply: HtspMessage, nowSec: Long): IngestResult {
         val raw = reply.fields["events"]
             ?: reply.fields["epg"]
             ?: reply.fields["entries"]
-            ?: return
+            ?: return IngestResult(0, mutableMapOf(), mutableMapOf())
 
         @Suppress("UNCHECKED_CAST")
-        val list = raw as? List<Map<String, Any?>> ?: return
+        val list = raw as? List<Map<String, Any?>> ?: return IngestResult(0, mutableMapOf(), mutableMapOf())
+
+        val minStart = mutableMapOf<Int, Long>()
+        val maxStop = mutableMapOf<Int, Long>()
+        var total = 0
 
         for (ev in list) {
             val eventId = (ev["eventId"] as? Number)?.toInt()
@@ -410,10 +556,90 @@ class TvhRepository(
             flow.value = upsertAndTrim(
                 list = flow.value,
                 item = EpgEventEntry(eventId, channelId, start, stop, title, summary),
-                nowSec = System.currentTimeMillis() / 1000L,
-                keepPastSec = 2 * 3600,
-                keepFutureSec = 12 * 3600
+                nowSec = nowSec,
+                keepPastSec = keepPastSec,
+                keepFutureSec = keepFutureSec
             )
+
+            minStart[channelId] = min(minStart[channelId] ?: Long.MAX_VALUE, start)
+            maxStop[channelId] = max(maxStop[channelId] ?: 0L, stop)
+            total++
+        }
+
+        // Apply coverage updates
+        for ((ch, mn) in minStart) {
+            val cov = epgCoverage.getOrPut(ch) { EpgCoverage() }
+            cov.coveredFrom = min(cov.coveredFrom, mn)
+        }
+        for ((ch, mx) in maxStop) {
+            val cov = epgCoverage.getOrPut(ch) { EpgCoverage() }
+            cov.coveredTo = max(cov.coveredTo, mx)
+        }
+
+        return IngestResult(total, minStart, maxStop)
+    }
+
+    // ---------------------------
+    // Trimming / maintenance
+    // ---------------------------
+
+    private fun trimAllEpgLocked(nowSec: Long) {
+        // Trim each channel's list to keepPast/keepFuture bounds
+        for ((chId, flow) in epgByChannel) {
+            flow.value = flow.value
+                .asSequence()
+                .filter { e ->
+                    e.stop >= (nowSec - keepPastSec) && e.start <= (nowSec + keepFutureSec)
+                }
+                .sortedBy { it.start }
+                .toList()
+        }
+
+        // Soft-fix coverage if it drifts too far behind after trimming:
+        // If coveredFrom/To no longer match the retained list, we keep "coveredTo"
+        // as the max of currently stored events so the worker doesn't get confused.
+        for ((chId, flow) in epgByChannel) {
+            val list = flow.value
+            if (list.isEmpty()) continue
+            val cov = epgCoverage.getOrPut(chId) { EpgCoverage() }
+            cov.coveredFrom = min(cov.coveredFrom, list.first().start)
+            cov.coveredTo = max(cov.coveredTo, list.last().stop)
         }
     }
+
+    private fun upsertAndTrim(
+        list: List<EpgEventEntry>,
+        item: EpgEventEntry,
+        nowSec: Long,
+        keepPastSec: Long,
+        keepFutureSec: Long
+    ): List<EpgEventEntry> {
+        val from = nowSec - keepPastSec
+        val to = nowSec + keepFutureSec
+
+        val replaced = buildList(list.size + 1) {
+            var found = false
+            for (e in list) {
+                if (e.eventId == item.eventId) {
+                    add(item)
+                    found = true
+                } else {
+                    add(e)
+                }
+            }
+            if (!found) add(item)
+        }
+
+        return replaced
+            .asSequence()
+            .filter { it.stop >= from && it.start <= to }
+            .sortedBy { it.start }
+            .toList()
+    }
+
+    // ---------------------------
+    // Utils
+    // ---------------------------
+
+    private fun nowSec(): Long = System.currentTimeMillis() / 1000L
 }

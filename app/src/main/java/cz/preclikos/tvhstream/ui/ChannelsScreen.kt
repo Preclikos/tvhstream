@@ -49,17 +49,18 @@ import androidx.media3.common.util.UnstableApi
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.ui.player.progress
-import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
+import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import kotlinx.coroutines.delay
+import org.koin.androidx.compose.koinViewModel
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun ChannelsScreen(
-    vm: AppConnectionViewModel,
+    channelViewModel: ChannelsViewModel = koinViewModel(),
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    val channels by vm.channels.collectAsState()
+    val channels by channelViewModel.channels.collectAsState()
 
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
     LaunchedEffect(Unit) {
@@ -79,9 +80,11 @@ fun ChannelsScreen(
 
     val focusedChannel = channels.firstOrNull { it.id == focusedChannelId }
     val focusedNow = remember(focusedChannelId, nowSec) {
-        focusedChannel?.let { vm.nowEvent(it.id, nowSec) }
+        focusedChannel?.let { channelViewModel.nowEvent(it.id, nowSec) }
     }
-
+    val focusedNext = remember(focusedChannelId, nowSec) {
+        focusedChannel?.let { channelViewModel.nextEvent(it.id, nowSec) }
+    }
     val listState = rememberLazyListState()
 
     LaunchedEffect(channels) {
@@ -132,7 +135,8 @@ fun ChannelsScreen(
                 ) {
                     itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
                         val isFocused = ch.id == focusedChannelId
-                        val now = remember(ch.id, nowSec) { vm.nowEvent(ch.id, nowSec) }
+                        val now =
+                            remember(ch.id, nowSec) { channelViewModel.nowEvent(ch.id, nowSec) }
                         val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
 
                         ChannelRow(
@@ -167,7 +171,8 @@ fun ChannelsScreen(
                 EpgDetailPane(
                     channelName = focusedChannel?.name ?: "—",
                     now = focusedNow,
-                    nowSec = nowSec
+                    nowSec = nowSec,
+                    next = focusedNext,
                 )
             }
         }
@@ -268,52 +273,80 @@ private fun ChannelRow(
 @Composable
 private fun EpgDetailPane(
     channelName: String,
-    now: Any?, // <- nechávám Any? aby to šlo zkopírovat; níže cast na tvůj typ
-    nowSec: Long
+    now: EpgEventEntry?,
+    next: EpgEventEntry?,   // <- NOVÉ
+    nowSec: Long,
+    piconUrl: String? = null // <- do budoucna tvheadend picon
 ) {
 
-
-    val e = now as? EpgEventEntry // <-- uprav na svůj balíček/třídu
-
-    val progress = remember(e, nowSec) { e?.progress(nowSec) ?: 0f }
+    val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
 
     Column(Modifier.padding(14.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+
+        // ===== TOP ROW =====
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
             Column(Modifier.weight(1f)) {
                 Text(
                     text = channelName,
                     style = MaterialTheme.typography.titleLarge
                 )
-                Spacer(Modifier.height(2.dp))
+
+                Spacer(Modifier.height(4.dp))
+
                 Text(
-                    text = e?.title ?: stringResource(R.string.no_epg),
+                    text = now?.title ?: stringResource(R.string.no_epg),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+
+            // ===== RIGHT ICON / PICON =====
+            Box(
+                modifier = Modifier
+                    .width(92.dp)
+                    .height(64.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (piconUrl != null) {
+                    // TODO: Coil/AsyncImage
+                    // AsyncImage(model = piconUrl, contentDescription = null)
+                } else {
+                    Text("📺", style = MaterialTheme.typography.displayMedium)
+                }
+            }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
-        if (e != null) {
+        // ===== PROGRESS + TIME =====
+        if (now != null) {
+            val start = remember(now) { now.start }
+            val end = remember(now) { now.stop }
+            val durMin = ((end - start) / 60).coerceAtLeast(0)
 
-            val start = remember(e) { e.start }
-            val end = remember(e) { e.stop }
-            val durSec = (end - start).coerceAtLeast(0)
-            val durMin = durSec / 60
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(
+                        R.string.epg_time_duration,
+                        formatHm(start),
+                        formatHm(end),
+                        durMin.toInt()
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-            Text(
-                text = stringResource(
-                    R.string.epg_time_duration,
-                    formatHm(start),
-                    formatHm(end),
-                    durMin.toInt()
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.height(6.dp))
 
-            Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = { progress.coerceIn(0f, 1f) },
                 modifier = Modifier
@@ -321,25 +354,50 @@ private fun EpgDetailPane(
                     .height(6.dp)
                     .clip(MaterialTheme.shapes.small)
             )
+        }
 
-            Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
+        // ===== SUMMARY =====
+        if (now?.summary != null) {
             Text(
-                text = e.summary ?: "",
+                text = now.summary,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 6,
+                overflow = TextOverflow.Ellipsis
             )
-        } else {
-            Text(
-                text = stringResource(R.string.select_channel_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        // ===== NEXT SHOW RIGHT BOTTOM =====
+        if (next != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ) {
+
+                Text(
+                    text = stringResource(R.string.epg_next, formatHm(next.start)),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(Modifier.height(2.dp))
+
+                Text(
+                    text = next.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }
 
-/** jednoduché HH:mm z unix seconds (lokální čas) */
 private fun formatHm(unixSec: Long): String {
     val ms = unixSec * 1000L
     val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }

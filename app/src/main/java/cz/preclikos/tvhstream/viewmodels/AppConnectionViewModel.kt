@@ -2,6 +2,7 @@ package cz.preclikos.tvhstream.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.htsp.HtspEvent
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
@@ -24,8 +25,6 @@ class AppConnectionViewModel(
     private val settings: SettingsStore,
     private val passwords: SecurePasswordStore
 ) : ViewModel() {
-
-    val channels = repo.channelsUi
     val status = statusService.headline
 
     private data class ServerCfg(
@@ -184,7 +183,6 @@ class AppConnectionViewModel(
             statusService.set(StatusSlot.EPG, null)
             statusService.set(StatusSlot.CONNECTION, "Connecting to $host:$port")
 
-            // reset lokálního stavu před connectem/reconnectem
             repo.onNewConnectionStarting()
 
             htsp.connect(host, port, username, password)
@@ -193,10 +191,9 @@ class AppConnectionViewModel(
             statusService.set(StatusSlot.SYNC, "Syncing…")
             htsp.enableAsyncMetadataAndWaitInitialSync()
 
-            // repo si při initialSyncCompleted odemkne barrier
             repo.awaitChannelsReady()
 
-            repo.startEpgSnapshotWorker(batchSize = 5)
+            repo.startEpgWorker()
 
             true
         } catch (e: Exception) {
@@ -205,6 +202,4 @@ class AppConnectionViewModel(
             false
         }
     }
-
-    fun nowEvent(channelId: Int, nowSec: Long) = repo.nowEvent(channelId, nowSec)
 }

@@ -18,7 +18,6 @@ import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import cz.preclikos.tvhstream.ui.player.VideoPlayerScreen
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
-import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import kotlin.system.exitProcess
@@ -56,7 +55,6 @@ fun AppRoot() {
         ) {
             composable(Routes.CHANNELS) {
                 ChannelsScreen(
-                    vm = appVm,
                     onPlay = { channelId, serviceId, name ->
                         nav.navigate(Routes.player(channelId, serviceId, name))
                     },
@@ -83,14 +81,11 @@ fun AppRoot() {
                     navArgument("channelName") { type = NavType.StringType },
                 )
             ) { backStackEntry ->
-                val playerVm: VideoPlayerViewModel = koinViewModel()
-
                 val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
                 val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
                 val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
 
                 VideoPlayerScreen(
-                    vm = playerVm,
                     channelId = channelId,
                     channelName = channelName,
                     serviceId = serviceId,

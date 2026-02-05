@@ -45,10 +45,6 @@ data class HtspMessage(
         else -> null
     }
 
-    /**
-     * HTSP "bin" pole typicky přenáší raw bytes -> potřebuješ pro "challenge".
-     * Tvůj HtspCodec by to měl dekódovat jako ByteArray.
-     */
     fun bin(key: String): ByteArray? = when (val v = fields[key]) {
         is ByteArray -> v
         else -> null

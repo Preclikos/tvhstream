@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.htsp
 
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -16,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
+import timber.log.Timber
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.InputStream
@@ -61,7 +63,7 @@ class HtspService(
         password: String? = null,
         clientName: String = "TVHStream",
         clientVersion: String = "0.1",
-        htspVersion: Int = 34,
+        htspVersion: Int = 43,
         timeoutMs: Long = 100_000,
         soTimeoutMs: Int = 15_000,
         socketBufferBytes: Int = 64 * 1024
@@ -126,10 +128,6 @@ class HtspService(
         }
     }
 
-    /**
-     * Zapne async metadata a počká na initialSyncCompleted.
-     * Tohle je v moderním HTSP typický způsob, jak získat seznam kanálů: přijde přes channelAdd.
-     */
     suspend fun enableAsyncMetadataAndWaitInitialSync(timeoutMs: Long = 30_000) {
         if (!isConnectedUnsafe()) throw IllegalStateException("Not connected")
         val def = CompletableDeferred<Unit>()
@@ -199,6 +197,7 @@ class HtspService(
                     yield()
                     continue
                 }
+
                 if (msg.seq == null && msg.method == "initialSyncCompleted") {
                     initialSyncDef?.complete(Unit)
                 }

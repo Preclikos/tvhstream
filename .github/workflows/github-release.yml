@@ -67,7 +67,7 @@ jobs:
           ./gradlew clean assembleRelease
 
       - uses: r0adkll/sign-android-release@v1
-        name: Sign TvPlayer APK
+        name: Sign APK
         id: sign_app
         with:
           releaseDirectory: app/build/outputs/apk/release

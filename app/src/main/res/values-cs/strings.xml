@@ -7,6 +7,7 @@
 
     <string name="options">Možnosti</string>
     <string name="no_epg">Bez EPG</string>
+    <string name="epg_next">Následující %1$s</string>
     <string name="select_channel_hint">Vyber kanál vlevo pro zobrazení detailu.</string>
 
     <!-- EPG detail line -->

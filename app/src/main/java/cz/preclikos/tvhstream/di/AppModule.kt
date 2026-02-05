@@ -8,6 +8,7 @@ import cz.preclikos.tvhstream.services.StatusServiceImpl
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
+import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -43,4 +44,5 @@ val appModule = module {
         )
     }
     viewModel { VideoPlayerViewModel(playerSession = get(), repo = get()) }
+    viewModel { ChannelsViewModel(repo = get()) }
 }
