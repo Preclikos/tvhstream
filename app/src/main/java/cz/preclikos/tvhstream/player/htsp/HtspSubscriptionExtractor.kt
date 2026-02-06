@@ -10,7 +10,7 @@ import androidx.media3.extractor.ExtractorOutput
 import androidx.media3.extractor.PositionHolder
 import androidx.media3.extractor.SeekMap
 import androidx.media3.extractor.SeekPoint
-import cz.preclikos.tvhstream.htsp.HtspFramedCodec
+import cz.preclikos.tvhstream.player.htsp.HtspFramedCodec
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.player.htsp.reader.StreamReader
 import cz.preclikos.tvhstream.player.htsp.reader.StreamReadersFactory

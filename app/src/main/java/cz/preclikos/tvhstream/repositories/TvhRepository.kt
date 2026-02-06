@@ -91,7 +91,11 @@ class TvhRepository(
     // ---------------------------
 
     private var lastStatusMs = 0L
-    private fun setStatusThrottled(text: String, slot: StatusSlot = StatusSlot.EPG, minIntervalMs: Long = 700L) {
+    private fun setStatusThrottled(
+        text: String,
+        slot: StatusSlot = StatusSlot.EPG,
+        minIntervalMs: Long = 700L
+    ) {
         val now = System.currentTimeMillis()
         if (now - lastStatusMs >= minIntervalMs) {
             lastStatusMs = now
@@ -145,19 +149,18 @@ class TvhRepository(
     private var epgWorkerJob: Job? = null
 
     // Lifecycle
-    @Volatile private var started = false
+    @Volatile
+    private var started = false
 
     fun startIfNeeded() {
         if (started) return
         started = true
 
         scope.launch {
-            htsp.events.collect { e ->
+            htsp.controlEvents.collect { e ->
                 when (e) {
                     is HtspEvent.ServerMessage -> handleServerMessage(e.msg)
-                    is HtspEvent.ConnectionError -> {
-                        // no-op: your outer code calls onDisconnected()
-                    }
+                    else -> {}
                 }
             }
         }
@@ -218,9 +221,17 @@ class TvhRepository(
                 if (targets.isEmpty()) {
                     val (warmDone, total) = stateMutex.withLock { warmupProgressLocked(nowSec) }
                     if (total > 0 && warmDone >= total) {
-                        setStatusThrottled("EPG steady (warmup $warmDone/$total)", StatusSlot.EPG, minIntervalMs = 2_000)
+                        setStatusThrottled(
+                            "EPG steady (warmup $warmDone/$total)",
+                            StatusSlot.EPG,
+                            minIntervalMs = 2_000
+                        )
                     } else if (total > 0) {
-                        setStatusThrottled("EPG warmup $warmDone/$total", StatusSlot.EPG, minIntervalMs = 1_000)
+                        setStatusThrottled(
+                            "EPG warmup $warmDone/$total",
+                            StatusSlot.EPG,
+                            minIntervalMs = 1_000
+                        )
                     }
                     delay(idleDelayMs)
                     continue
@@ -338,7 +349,13 @@ class TvhRepository(
 
         // Order channels by number/name, but select targets by "how far behind horizon they are"
         val sortedIds = channelMap.values
-            .sortedWith(compareBy({ it.number == null }, { it.number ?: Int.MAX_VALUE }, { it.name.lowercase() }, { it.id }))
+            .sortedWith(
+                compareBy(
+                    { it.number == null },
+                    { it.number ?: Int.MAX_VALUE },
+                    { it.name.lowercase() },
+                    { it.id })
+            )
             .map { it.id }
 
         val candidates = sortedIds.asSequence()
@@ -406,7 +423,11 @@ class TvhRepository(
                 epgCoverage.getOrPut(id) { EpgCoverage() }
 
                 publishChannelsLocked()
-                setStatusThrottled("Syncing channels… ${channelMap.size}", StatusSlot.SYNC, minIntervalMs = 700)
+                setStatusThrottled(
+                    "Syncing channels… ${channelMap.size}",
+                    StatusSlot.SYNC,
+                    minIntervalMs = 700
+                )
             }
 
             "channelUpdate" -> {
@@ -424,7 +445,11 @@ class TvhRepository(
 
                 channelMap[id] = existing.copy(name = newName, number = newNumber)
                 publishChannelsLocked()
-                setStatusThrottled("Syncing channels… ${channelMap.size}", StatusSlot.SYNC, minIntervalMs = 700)
+                setStatusThrottled(
+                    "Syncing channels… ${channelMap.size}",
+                    StatusSlot.SYNC,
+                    minIntervalMs = 700
+                )
             }
         }
     }
@@ -442,7 +467,13 @@ class TvhRepository(
 
     private fun publishChannelsLocked() {
         val sorted = channelMap.values
-            .sortedWith(compareBy({ it.number == null }, { it.number ?: Int.MAX_VALUE }, { it.name.lowercase() }, { it.id }))
+            .sortedWith(
+                compareBy(
+                    { it.number == null },
+                    { it.number ?: Int.MAX_VALUE },
+                    { it.name.lowercase() },
+                    { it.id })
+            )
             .map { ChannelUi(it.id, formatName(it)) }
 
         _channelsUi.value = sorted
@@ -522,7 +553,11 @@ class TvhRepository(
             ?: return IngestResult(0, mutableMapOf(), mutableMapOf())
 
         @Suppress("UNCHECKED_CAST")
-        val list = raw as? List<Map<String, Any?>> ?: return IngestResult(0, mutableMapOf(), mutableMapOf())
+        val list = raw as? List<Map<String, Any?>> ?: return IngestResult(
+            0,
+            mutableMapOf(),
+            mutableMapOf()
+        )
 
         val minStart = mutableMapOf<Int, Long>()
         val maxStop = mutableMapOf<Int, Long>()

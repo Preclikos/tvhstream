@@ -1,6 +1,5 @@
 package cz.preclikos.tvhstream.htsp
 
-import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -17,7 +16,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
-import timber.log.Timber
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.InputStream
@@ -35,11 +33,17 @@ class HtspService(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
-    private val _events = MutableSharedFlow<HtspEvent>(
+    private val _controlEvents = MutableSharedFlow<HtspEvent>(
         extraBufferCapacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val events: SharedFlow<HtspEvent> = _events
+    val controlEvents: SharedFlow<HtspEvent> = _controlEvents
+
+    private val _muxEvents = MutableSharedFlow<HtspMessage>(
+        extraBufferCapacity = 8192,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val muxEvents: SharedFlow<HtspMessage> = _muxEvents
 
     private val pending = ConcurrentHashMap<Int, CompletableDeferred<HtspMessage>>()
     private val seq = AtomicInteger(1)
@@ -47,14 +51,26 @@ class HtspService(
     private val writeMutex = Mutex()
     private val connectMutex = Mutex()
 
-    @Volatile private var socket: Socket? = null
-    @Volatile private var input: InputStream? = null
-    @Volatile private var output: OutputStream? = null
-    @Volatile private var readerJob: Job? = null
+    @Volatile
+    private var socket: Socket? = null
 
-    @Volatile private var challenge: ByteArray? = null
-    @Volatile private var negotiatedHtspVersion: Int? = null
-    @Volatile private var initialSyncDef: CompletableDeferred<Unit>? = null
+    @Volatile
+    private var input: InputStream? = null
+
+    @Volatile
+    private var output: OutputStream? = null
+
+    @Volatile
+    private var readerJob: Job? = null
+
+    @Volatile
+    private var challenge: ByteArray? = null
+
+    @Volatile
+    private var negotiatedHtspVersion: Int? = null
+
+    @Volatile
+    private var initialSyncDef: CompletableDeferred<Unit>? = null
 
     suspend fun connect(
         host: String,
@@ -67,64 +83,66 @@ class HtspService(
         timeoutMs: Long = 100_000,
         soTimeoutMs: Int = 15_000,
         socketBufferBytes: Int = 64 * 1024
-    ) = connectMutex.withLock {
-        if (isConnectedUnsafe()) return
+    ) {
+        connectMutex.withLock {
+            if (isConnectedUnsafe()) return
 
-        disconnectInternal(CancellationException("Reconnect"))
+            disconnectInternal(CancellationException("Reconnect"))
 
-        val s = Socket(host, port).apply {
-            soTimeout = soTimeoutMs
-            keepAlive = true
-            tcpNoDelay = true
-        }
-
-        val inp = BufferedInputStream(s.getInputStream(), socketBufferBytes)
-        val out = BufferedOutputStream(s.getOutputStream(), socketBufferBytes)
-
-        socket = s
-        input = inp
-        output = out
-
-        readerJob = scope.launch { readerLoop() }
-
-        try {
-            val hello = withTimeout(timeoutMs) {
-                request(
-                    method = "hello",
-                    fields = mapOf(
-                        "htspversion" to htspVersion,
-                        "clientname" to clientName,
-                        "clientversion" to clientVersion
-                    ),
-                    timeoutMs = timeoutMs,
-                    flush = true
-                )
+            val s = Socket(host, port).apply {
+                soTimeout = soTimeoutMs
+                keepAlive = true
+                tcpNoDelay = true
             }
 
-            challenge = hello.bin("challenge")
-            val serverMax = hello.int("htspversion") ?: htspVersion
-            negotiatedHtspVersion = min(htspVersion, serverMax)
-            val user = username?.trim().orEmpty()
-            val pass = password?.trim().orEmpty()
+            val inp = BufferedInputStream(s.getInputStream(), socketBufferBytes)
+            val out = BufferedOutputStream(s.getOutputStream(), socketBufferBytes)
 
-            if (user.isNotEmpty() && pass.isNotEmpty() && challenge != null) {
-                val digest = makeDigest(pass, challenge!!)
-                val auth = withTimeout(timeoutMs) {
+            socket = s
+            input = inp
+            output = out
+
+            readerJob = scope.launch { readerLoop() }
+
+            try {
+                val hello = withTimeout(timeoutMs) {
                     request(
-                        method = "authenticate",
-                        fields = mapOf("username" to user, "digest" to digest),
+                        method = "hello",
+                        fields = mapOf(
+                            "htspversion" to htspVersion,
+                            "clientname" to clientName,
+                            "clientversion" to clientVersion
+                        ),
                         timeoutMs = timeoutMs,
                         flush = true
                     )
                 }
-                if (auth.int("noaccess") == 1) {
-                    throw IllegalStateException("HTSP authentication failed (noaccess=1)")
-                }
-            }
 
-        } catch (t: Throwable) {
-            disconnectInternal(t)
-            throw t
+                challenge = hello.bin("challenge")
+                val serverMax = hello.int("htspversion") ?: htspVersion
+                negotiatedHtspVersion = min(htspVersion, serverMax)
+                val user = username?.trim().orEmpty()
+                val pass = password?.trim().orEmpty()
+
+                if (user.isNotEmpty() && pass.isNotEmpty() && challenge != null) {
+                    val digest = makeDigest(pass, challenge!!)
+                    val auth = withTimeout(timeoutMs) {
+                        request(
+                            method = "authenticate",
+                            fields = mapOf("username" to user, "digest" to digest),
+                            timeoutMs = timeoutMs,
+                            flush = true
+                        )
+                    }
+                    if (auth.int("noaccess") == 1) {
+                        throw IllegalStateException("HTSP authentication failed (noaccess=1)")
+                    }
+                }
+
+            } catch (t: Throwable) {
+                disconnectInternal(t)
+                throw t
+            }
         }
     }
 
@@ -134,7 +152,12 @@ class HtspService(
         initialSyncDef = def
 
         try {
-            request(method = "enableAsyncMetadata", fields = emptyMap(), timeoutMs = timeoutMs, flush = true)
+            request(
+                method = "enableAsyncMetadata",
+                fields = emptyMap(),
+                timeoutMs = timeoutMs,
+                flush = true
+            )
             withTimeout(timeoutMs) { def.await() }
         } finally {
             if (initialSyncDef === def) initialSyncDef = null
@@ -198,17 +221,27 @@ class HtspService(
                     continue
                 }
 
+                // Special-cased latch
                 if (msg.seq == null && msg.method == "initialSyncCompleted") {
                     initialSyncDef?.complete(Unit)
                 }
 
+                // 1) Replies to pending requests: complete and DO NOT broadcast
                 val seqNo = msg.seq
                 if (seqNo != null) {
                     val def = pending.remove(seqNo)
-                    if (def != null) def.complete(msg)
-                    else _events.tryEmit(HtspEvent.ServerMessage(msg))
+                    if (def != null) {
+                        def.complete(msg)
+                        continue
+                    }
+                    // else fall-through: unsolicited message with seq -> publish as control
+                }
+
+                // 2) Stream plane vs control plane
+                if (msg.method == "muxpkt") {
+                    _muxEvents.tryEmit(msg) // only stream consumers get it
                 } else {
-                    _events.tryEmit(HtspEvent.ServerMessage(msg))
+                    _controlEvents.tryEmit(HtspEvent.ServerMessage(msg))
                 }
             }
         } catch (t: Throwable) {
@@ -244,9 +277,18 @@ class HtspService(
         readerJob?.cancel()
         readerJob = null
 
-        try { input?.close() } catch (_: Throwable) {}
-        try { output?.close() } catch (_: Throwable) {}
-        try { socket?.close() } catch (_: Throwable) {}
+        try {
+            input?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            output?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            socket?.close()
+        } catch (_: Throwable) {
+        }
 
         input = null
         output = null
@@ -256,7 +298,7 @@ class HtspService(
     }
 
     private fun failAll(t: Throwable) {
-        _events.tryEmit(HtspEvent.ConnectionError(t))
+        _controlEvents.tryEmit(HtspEvent.ConnectionError(t))
 
         val defs = pending.values.toList()
         pending.clear()
@@ -265,9 +307,18 @@ class HtspService(
         initialSyncDef?.completeExceptionally(t)
         initialSyncDef = null
 
-        try { input?.close() } catch (_: Throwable) {}
-        try { output?.close() } catch (_: Throwable) {}
-        try { socket?.close() } catch (_: Throwable) {}
+        try {
+            input?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            output?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            socket?.close()
+        } catch (_: Throwable) {
+        }
 
         input = null
         output = null

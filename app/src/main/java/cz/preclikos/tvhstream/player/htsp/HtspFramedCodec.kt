@@ -1,4 +1,6 @@
-package cz.preclikos.tvhstream.htsp
+package cz.preclikos.tvhstream.player.htsp
+
+import cz.preclikos.tvhstream.htsp.HtspMessage
 import java.io.IOException
 
 /**
@@ -110,6 +112,7 @@ object HtspFramedCodec {
                 val b = v.toByteArray(Charsets.UTF_8)
                 4 + b.size
             }
+
             is ByteArray -> 4 + v.size
             is Map<*, *> -> {
                 // Very rough: type already counted outside; here estimate content.
@@ -121,6 +124,7 @@ object HtspFramedCodec {
                 }
                 s
             }
+
             is List<*> -> {
                 var s = 4
                 for (item in v) s += 1 + estimateValueSize(item) // type+value; type counted in writeValue for item
@@ -129,6 +133,7 @@ object HtspFramedCodec {
                 // (Better safe than wrong micro-optimization.)
                 4 + v.sumOf { estimateValueSize(it) }
             }
+
             else -> {
                 val b = v.toString().toByteArray(Charsets.UTF_8)
                 4 + b.size

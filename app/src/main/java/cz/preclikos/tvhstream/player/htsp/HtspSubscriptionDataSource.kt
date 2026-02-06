@@ -1,9 +1,7 @@
 package cz.preclikos.tvhstream.player.htsp
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.telecom.ConnectionService
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
@@ -11,7 +9,6 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 import cz.preclikos.tvhstream.htsp.HtspEvent
-import cz.preclikos.tvhstream.htsp.HtspFramedCodec
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
 import kotlinx.coroutines.CoroutineScope
@@ -191,35 +188,37 @@ class HtspSubscriptionDataSource private constructor(
         if (eventJob != null) return
 
         eventJob = jobScope.launch {
-            htspConnection.events.collect { ev ->
-                val msg = (ev as? HtspEvent.ServerMessage)?.msg ?: return@collect
+            launch {
+                htspConnection.controlEvents.collect { ev ->
+                    val msg = (ev as? HtspEvent.ServerMessage)?.msg ?: return@collect
+                    val msgSubId = msg.int("subscriptionId")
+                    if (msgSubId != null && msgSubId != subscriptionId) return@collect
 
-                // Filtruj jen relevantní subscription (hodně důležité pro výkon i správnost)
-                val msgSubId = msg.int("subscriptionId")
-                if (msgSubId != null && msgSubId != subscriptionId) return@collect
+                    when (msg.method) {
+                        "subscriptionStart" -> {
+                            subscriptionStarted = true
+                            writeFramedMessage(msg)
+                        }
 
-                when (msg.method) {
-                    "subscriptionStart" -> {
-                        subscriptionStarted = true
-                        writeFramedMessage(msg)
-                    }
-
-                    "muxpkt" -> {
-                        // tohle chodí často -> musí být rychlé
-                        writeFramedMessage(msg)
-                    }
-
-                    "subscriptionStop" -> {
-                        subscriptionStarted = false
-                        // probuď případně čekající read()
-                        lock.lock()
-                        try {
-                            notEmpty.signalAll()
-                            notFull.signalAll()
-                        } finally {
-                            lock.unlock()
+                        "subscriptionStop" -> {
+                            subscriptionStarted = false
+                            lock.lock()
+                            try {
+                                notEmpty.signalAll()
+                                notFull.signalAll()
+                            } finally {
+                                lock.unlock()
+                            }
                         }
                     }
+                }
+            }
+
+            launch {
+                htspConnection.muxEvents.collect { msg ->
+                    val msgSubId = msg.int("subscriptionId")
+                    if (msgSubId != null && msgSubId != subscriptionId) return@collect
+                    writeFramedMessage(msg)
                 }
             }
         }

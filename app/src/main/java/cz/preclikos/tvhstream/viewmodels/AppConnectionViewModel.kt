@@ -58,7 +58,7 @@ class AppConnectionViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            htsp.events.collectLatest { e ->
+            htsp.controlEvents.collectLatest { e ->
                 when (e) {
                     is HtspEvent.ConnectionError -> {
                         statusService.set(StatusSlot.CONNECTION, "Disconnected. Reconnecting…")
