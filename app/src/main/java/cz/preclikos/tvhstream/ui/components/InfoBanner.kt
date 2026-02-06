@@ -1,4 +1,4 @@
-package cz.preclikos.tvhstream.ui
+package cz.preclikos.tvhstream.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween

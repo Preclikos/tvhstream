@@ -19,7 +19,8 @@
         android:banner="@drawable/banner"
         android:supportsRtl="true"
         android:theme="@style/Theme.TVHStream"
-        android:name=".App">
+        android:name=".App"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".ui.MainActivity"

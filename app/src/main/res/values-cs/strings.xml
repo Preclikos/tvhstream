@@ -16,7 +16,8 @@
     <!-- Settings screen -->
     <string name="settings_title">Nastavení</string>
     <string name="host">Host</string>
-    <string name="port">Port</string>
+    <string name="port_htsp">Htsp Port</string>
+    <string name="port_http">Http Port</string>
     <string name="username">Uživatelské jméno</string>
     <string name="password">Heslo</string>
 

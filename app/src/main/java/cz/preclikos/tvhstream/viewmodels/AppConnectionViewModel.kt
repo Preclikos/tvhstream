@@ -31,7 +31,8 @@ class AppConnectionViewModel(
 
     private data class ServerCfg(
         val host: String,
-        val port: Int,
+        val htspPort: Int,
+        val httpPort: Int,
         val username: String,
         val password: String
     )
@@ -50,7 +51,8 @@ class AppConnectionViewModel(
 
                 lastCfg = ServerCfg(
                     host = s.host,
-                    port = s.port,
+                    htspPort = s.htspPort,
+                    httpPort = s.httpPort,
                     username = s.username,
                     password = passwords.getPassword()
                 )
@@ -165,7 +167,12 @@ class AppConnectionViewModel(
             while (true) {
                 val cfg = lastCfg ?: return@launch
 
-                val ok = connectInternal(cfg.host, cfg.port, cfg.username, cfg.password)
+                val ok = connectInternal(
+                    cfg.host,
+                    cfg.htspPort,
+                    cfg.username,
+                    cfg.password
+                )
                 if (ok) return@launch
 
                 statusService.set(StatusSlot.CONNECTION, "Reconnect in 5s…")
@@ -178,8 +185,14 @@ class AppConnectionViewModel(
         startOrRestartReconnectLoop()
     }
 
-    fun connectOnceFromUi(host: String, port: Int, username: String, password: String) {
-        lastCfg = ServerCfg(host, port, username, password)
+    fun connectOnceFromUi(
+        host: String,
+        htspPort: Int,
+        httpPort: Int,
+        username: String,
+        password: String
+    ) {
+        lastCfg = ServerCfg(host, htspPort, httpPort, username, password)
         startOrRestartReconnectLoop()
     }
 

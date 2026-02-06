@@ -80,5 +80,9 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.analytics)
 
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
+
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
 }

@@ -1,17 +1,18 @@
 [versions]
 activityCompose = "1.12.3"
 agp = "8.13.2"
+coil = "3.3.0"
 composeBom = "2026.01.01"
 datastorePreferences = "1.2.0"
-firebaseBom = "34.8.0"
+firebaseBom = "34.9.0"
 koin = "4.1.1"
-kotlin = "2.3.0"
+kotlin = "2.3.10"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
 kotlinxCoroutines = "1.10.2"
 lifecycle = "2.10.0"
 material = "1.13.0"
-media3 = "1.9.1"
+media3 = "1.9.2"
 navigationCompose = "2.9.7"
 securityCrypto = "1.1.0"
 timber = "5.0.1"
@@ -37,6 +38,8 @@ androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "medi
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }

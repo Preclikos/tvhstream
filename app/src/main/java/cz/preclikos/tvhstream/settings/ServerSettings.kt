@@ -13,7 +13,8 @@ private val Context.dataStore by preferencesDataStore(name = "tvh_settings")
 
 data class ServerSettings(
     val host: String = "",
-    val port: Int = 9982,
+    val htspPort: Int = 9982,
+    val httpPort: Int = 9981,
     val username: String = ""
 )
 
@@ -21,7 +22,8 @@ class SettingsStore(private val context: Context) {
 
     private object Keys {
         val HOST = stringPreferencesKey("host")
-        val PORT = intPreferencesKey("port")
+        val PORT_HTSP = intPreferencesKey("htspPort")
+        val PORT_HTTP = intPreferencesKey("htspPort")
         val USER = stringPreferencesKey("user")
         val AUTO = booleanPreferencesKey("auto")
     }
@@ -30,15 +32,23 @@ class SettingsStore(private val context: Context) {
         context.dataStore.data.map { p ->
             ServerSettings(
                 host = p[Keys.HOST] ?: "",
-                port = p[Keys.PORT] ?: 9982,
+                htspPort = p[Keys.PORT_HTSP] ?: 9982,
+                httpPort = p[Keys.PORT_HTTP] ?: 9981,
                 username = p[Keys.USER] ?: ""
             )
         }
 
-    suspend fun saveServer(host: String, port: Int, username: String, autoConnect: Boolean) {
+    suspend fun saveServer(
+        host: String,
+        htspPort: Int,
+        httpPort: Int,
+        username: String,
+        autoConnect: Boolean
+    ) {
         context.dataStore.edit { p ->
             p[Keys.HOST] = host
-            p[Keys.PORT] = port
+            p[Keys.PORT_HTSP] = htspPort
+            p[Keys.PORT_HTTP] = httpPort
             p[Keys.USER] = username
             p[Keys.AUTO] = autoConnect
         }

@@ -1,4 +1,4 @@
-package cz.preclikos.tvhstream.ui
+package cz.preclikos.tvhstream.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,7 +46,8 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     var host by rememberSaveable { mutableStateOf("") }
-    var port by rememberSaveable { mutableStateOf("9982") }
+    var htspPort by rememberSaveable { mutableStateOf("9982") }
+    var httpPort by rememberSaveable { mutableStateOf("9981") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
     var auto by rememberSaveable { mutableStateOf(true) }
@@ -54,7 +55,8 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         settingsStore.serverSettings.collect { s ->
             host = s.host
-            port = s.port.toString()
+            htspPort = s.htspPort.toString()
+            httpPort = s.httpPort.toString()
             user = s.username
             pass = passwordStore.getPassword()
             return@collect
@@ -83,9 +85,16 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = port,
-                onValueChange = { port = it },
-                label = { Text(stringResource(R.string.port)) }
+                value = htspPort,
+                onValueChange = { htspPort = it },
+                label = { Text(stringResource(R.string.port_htsp)) }
+            )
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = httpPort,
+                onValueChange = { httpPort = it },
+                label = { Text(stringResource(R.string.port_http)) }
             )
             Spacer(Modifier.height(12.dp))
 
@@ -104,9 +113,10 @@ fun SettingsScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
-                val p = port.toIntOrNull() ?: 9982
+                val pHtsp = htspPort.toIntOrNull() ?: 9982
+                val pHttp = httpPort.toIntOrNull() ?: 9981
                 scope.launch {
-                    settingsStore.saveServer(host, p, user, auto)
+                    settingsStore.saveServer(host, pHtsp, pHttp, user, auto)
                     passwordStore.setPassword(pass)
                     onDone()
                 }

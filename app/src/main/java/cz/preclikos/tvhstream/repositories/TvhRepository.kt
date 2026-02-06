@@ -418,8 +418,8 @@ class TvhRepository(
                         ?: msg.int("lcn")
                         ?: msg.int("channelNum")
                         ?: msg.int("channelno")
-
-                channelMap[id] = ChannelEntry(id, name, number, null)
+                val icon = msg.str("channelIcon")
+                channelMap[id] = ChannelEntry(id, name, number, icon)
                 epgCoverage.getOrPut(id) { EpgCoverage() }
 
                 publishChannelsLocked()
@@ -442,8 +442,8 @@ class TvhRepository(
                         ?: msg.int("channelNum")
                         ?: msg.int("channelno")
                         ?: existing.number
-
-                channelMap[id] = existing.copy(name = newName, number = newNumber)
+                val icon = msg.str("channelIcon")
+                channelMap[id] = existing.copy(name = newName, number = newNumber, icon = icon)
                 publishChannelsLocked()
                 setStatusThrottled(
                     "Syncing channels… ${channelMap.size}",
@@ -474,7 +474,7 @@ class TvhRepository(
                     { it.name.lowercase() },
                     { it.id })
             )
-            .map { ChannelUi(it.id, formatName(it)) }
+            .map { ChannelUi(it.id, formatName(it), it.icon) }
 
         _channelsUi.value = sorted
     }

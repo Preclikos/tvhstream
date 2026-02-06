@@ -3,6 +3,8 @@ package cz.preclikos.tvhstream.ui
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -12,18 +14,24 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
+import cz.preclikos.tvhstream.ui.components.InfoBanner
+import cz.preclikos.tvhstream.ui.components.SideRail
 import cz.preclikos.tvhstream.ui.player.VideoPlayerScreen
+import cz.preclikos.tvhstream.ui.screens.ChannelsScreen
+import cz.preclikos.tvhstream.ui.screens.EpgGridScreen
+import cz.preclikos.tvhstream.ui.screens.SettingsScreen
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
-import kotlin.system.exitProcess
 
 object Routes {
     const val CHANNELS = "channels"
+    const val EPG = "epg"
     const val SETTINGS = "settings"
     const val PLAYER = "player"
     fun player(channelId: Int, serviceId: Int, channelName: String) =
@@ -39,64 +47,95 @@ fun AppRoot() {
     val appVm: AppConnectionViewModel = koinViewModel()
     val status by appVm.status.collectAsState()
 
+    val backStackEntry by nav.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val topRoute = currentRoute?.substringBefore("/")
+    val showRail = topRoute != Routes.PLAYER
+
     BackHandler {
-        if (nav.currentBackStackEntry?.destination?.route == Routes.CHANNELS) {
-            activity?.finishAffinity()
-            exitProcess(0)
-        } else {
-            nav.popBackStack()
+        when (currentRoute) {
+            Routes.CHANNELS, Routes.EPG -> {
+                activity?.finishAffinity()
+                kotlin.system.exitProcess(0)
+            }
+
+            Routes.SETTINGS -> {
+                nav.navigate(Routes.CHANNELS) { launchSingleTop = true }
+            }
+
+            else -> nav.popBackStack()
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-        NavHost(
-            navController = nav,
-            startDestination = Routes.CHANNELS
-        ) {
-            composable(Routes.CHANNELS) {
-                ChannelsScreen(
-                    onPlay = { channelId, serviceId, name ->
-                        nav.navigate(Routes.player(channelId, serviceId, name))
-                    },
-                    onOpenSettings = { nav.navigate(Routes.SETTINGS) }
-                )
-            }
-
-            composable(Routes.SETTINGS) {
-                val settings: SettingsStore = koinInject()
-                val passwords: SecurePasswordStore = koinInject()
-
-                SettingsScreen(
-                    settingsStore = settings,
-                    passwordStore = passwords,
-                    onDone = { nav.popBackStack() }
-                )
-            }
-
-            composable(
-                route = "${Routes.PLAYER}/{channelId}/{serviceId}/{channelName}",
-                arguments = listOf(
-                    navArgument("channelId") { type = NavType.IntType },
-                    navArgument("serviceId") { type = NavType.IntType },
-                    navArgument("channelName") { type = NavType.StringType },
-                )
-            ) { backStackEntry ->
-                val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
-                val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
-                val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
-
-                VideoPlayerScreen(
-                    channelId = channelId,
-                    channelName = channelName,
-                    serviceId = serviceId,
-                    onClose = { nav.popBackStack() }
-                )
-            }
+    Row(Modifier.fillMaxSize()) {
+        if (showRail) {
+            SideRail(
+                currentRoute = topRoute,
+                onNavigate = { route ->
+                    nav.navigate(route) {
+                        popUpTo(Routes.CHANNELS) { inclusive = false }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
 
-        InfoBanner(
-            message = status,
-            modifier = Modifier.fillMaxSize()
-        )
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        ) {
+            NavHost(navController = nav, startDestination = Routes.CHANNELS) {
+
+                composable(Routes.CHANNELS) {
+                    ChannelsScreen(
+                        onPlay = { channelId, serviceId, name ->
+                            nav.navigate(Routes.player(channelId, serviceId, name))
+                        }
+                    )
+                }
+
+                composable(Routes.EPG) {
+                    EpgGridScreen(
+                        onPlay = { channelId, serviceId, name ->
+                            nav.navigate(Routes.player(channelId, serviceId, name))
+                        }
+                    )
+                }
+
+                composable(Routes.SETTINGS) {
+                    val settings: SettingsStore = koinInject()
+                    val passwords: SecurePasswordStore = koinInject()
+                    SettingsScreen(
+                        settingsStore = settings,
+                        passwordStore = passwords,
+                        onDone = { nav.popBackStack() }
+                    )
+                }
+
+                composable(
+                    route = "${Routes.PLAYER}/{channelId}/{serviceId}/{channelName}",
+                    arguments = listOf(
+                        navArgument("channelId") { type = NavType.IntType },
+                        navArgument("serviceId") { type = NavType.IntType },
+                        navArgument("channelName") { type = NavType.StringType },
+                    )
+                ) { backStackEntry ->
+                    val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
+                    val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
+                    val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
+
+                    VideoPlayerScreen(
+                        channelId = channelId,
+                        channelName = channelName,
+                        serviceId = serviceId,
+                        onClose = { nav.popBackStack() }
+                    )
+                }
+            }
+
+            InfoBanner(message = status, modifier = Modifier.fillMaxSize())
+        }
     }
 }
