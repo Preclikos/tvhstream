@@ -1,12 +1,13 @@
 package cz.preclikos.tvhstream.viewmodels
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cz.preclikos.tvhstream.htsp.EpgEventEntry
+import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.HtspEvent
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
-import cz.preclikos.tvhstream.htsp.SubStatus
+import cz.preclikos.tvhstream.htsp.SubscriptionStatus
 import cz.preclikos.tvhstream.repositories.TvhRepository
 import cz.preclikos.tvhstream.services.StatusService
 import cz.preclikos.tvhstream.services.StatusSlot
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class AppConnectionViewModel(
+    private val context: Context,
     private val htsp: HtspService,
     private val repo: TvhRepository,
     private val statusService: StatusService,
@@ -86,16 +88,16 @@ class AppConnectionViewModel(
         }
     }
 
-    private val subs = mutableMapOf<Int, SubStatus>()
+    private val subs = mutableMapOf<Int, SubscriptionStatus>()
 
     private fun publishSubsStatus() {
-        val msg = subs.values.computeUiStatus()
+        val msg = subs.values.computeUiStatus(context)
         if (msg == null) statusService.set(StatusSlot.CONNECTION, null)
         else statusService.set(StatusSlot.CONNECTION, msg)
     }
 
 
-    private fun HtspMessage.toSubStatusOrNull(): SubStatus? {
+    private fun HtspMessage.toSubStatusOrNull(): SubscriptionStatus? {
         val m = method ?: return null
         if (m != "subscriptionStatus" && m != "subscriptionStart") return null
 
@@ -103,14 +105,10 @@ class AppConnectionViewModel(
             ?: int("id")
             ?: return null
 
-        return SubStatus(
+        return SubscriptionStatus(
             id = id,
-            serviceName = str("serviceName") ?: str("channelName") ?: str("service"),
             state = str("state") ?: str("status"),
-            errors = int("errors") ?: int("signalErrors") ?: int("ccErrors"),
-            input = str("input") ?: str("adapter") ?: str("tuner"),
-            username = str("username"),
-            hostname = str("hostname"),
+            subscriptionError = str("subscriptionError") ?: str("error")
         )
     }
 
@@ -120,28 +118,41 @@ class AppConnectionViewModel(
         return int("subscriptionId") ?: int("id")
     }
 
-    private fun Collection<SubStatus>.computeUiStatus(): String? {
+    private fun Collection<SubscriptionStatus>.computeUiStatus(ctx: Context): String? {
         if (isEmpty()) return null
 
-        val noInput = firstOrNull { s ->
-            s.state.equals("No input", ignoreCase = true) || s.input.isNullOrBlank()
-        }
-        if (noInput != null) {
-            val svc = noInput.serviceName ?: "channel"
-            return "No free tuner / no input ($svc)"
-        }
+        fun norm(v: String?): String =
+            v?.lowercase()?.replace(" ", "") ?: ""
 
-        val scrambled = firstOrNull { it.state.equals("Scrambled", ignoreCase = true) }
-        if (scrambled != null) {
-            val svc = scrambled.serviceName ?: "channel"
-            return "Channel is scrambled ($svc)"
-        }
+        for (s in this) {
+            val code = norm(s.subscriptionError ?: s.state)
 
-        val worst = maxByOrNull { it.errors ?: 0 }
-        val err = worst?.errors ?: 0
-        if (err > 0) {
-            val svc = worst?.serviceName ?: "channel"
-            return "Signal errors: $err ($svc)"
+            when {
+                "invalidtarget" in code ->
+                    return ctx.getString(R.string.tvh_target_invalid)
+
+                "nofreeadapter" in code ->
+                    return ctx.getString(R.string.tvh_no_free_adapter)
+
+                "muxnotenabled" in code ->
+                    return ctx.getString(R.string.tvh_mux_not_enabled)
+
+                "tuningfailed" in code ->
+                    return ctx.getString(R.string.tvh_tuning_failed)
+
+                "badsignal" in code ->
+                    return ctx.getString(R.string.tvh_bad_signal)
+
+                "scrambled" in code ->
+                    return ctx.getString(R.string.tvh_scrambled)
+
+                "subscriptionoverridden" in code ->
+                    return ctx.getString(R.string.tvh_subscription_overridden)
+
+                // fallback starší texty
+                "noinput" in code ->
+                    return ctx.getString(R.string.tvh_no_input)
+            }
         }
 
         return null

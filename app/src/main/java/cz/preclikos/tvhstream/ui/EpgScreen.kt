@@ -18,17 +18,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,53 +47,49 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import cz.preclikos.tvhstream.R
+import cz.preclikos.tvhstream.htsp.ChannelUi
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.ui.player.progress
 import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
+import java.util.Calendar
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun ChannelsScreen(
+fun EpgScreen(
     channelViewModel: ChannelsViewModel = koinViewModel(),
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit,
-    onOpenDrawer: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenDrawer: () -> Unit
 ) {
     val channels by channelViewModel.channels.collectAsState()
 
-    var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
+    var nowSec by remember { mutableStateOf(System.currentTimeMillis() / 1000L) }
     LaunchedEffect(Unit) {
         while (true) {
             nowSec = System.currentTimeMillis() / 1000L
-            delay(5000L)
+            delay(5_000L)
         }
     }
 
-    var focusedChannelId by rememberSaveable { mutableIntStateOf(-1) }
-
+    var selectedChannelId by rememberSaveable { mutableStateOf(-1) }
     LaunchedEffect(channels) {
-        if (channels.isNotEmpty() && focusedChannelId == -1) {
-            focusedChannelId = channels.first().id
+        if (channels.isNotEmpty() && selectedChannelId == -1) {
+            selectedChannelId = channels.first().id
         }
     }
 
-    val focusedChannel = channels.firstOrNull { it.id == focusedChannelId }
-    val focusedNow = remember(focusedChannelId, nowSec) {
-        focusedChannel?.let { channelViewModel.nowEvent(it.id, nowSec) }
-    }
-    val focusedNext = remember(focusedChannelId, nowSec) {
-        focusedChannel?.let { channelViewModel.nextEvent(it.id, nowSec) }
-    }
-    val listState = rememberLazyListState()
+    val selectedChannel: ChannelUi? = channels.firstOrNull { it.id == selectedChannelId }
 
-    LaunchedEffect(channels) {
-        if (channels.isEmpty() || focusedChannelId == -1) return@LaunchedEffect
-        val index = channels.indexOfFirst { it.id == focusedChannelId }
-        if (index >= 0) {
-            listState.scrollToItem((index - 3).coerceAtLeast(0))
-        }
+    // Pull full EPG list for selected channel (worker fills it gradually)
+    val epgFlow = remember(selectedChannelId) { channelViewModel.epgForChannel(selectedChannelId) }
+    val epg by epgFlow.collectAsState()
+
+    val channelListState = rememberLazyListState()
+    LaunchedEffect(channels, selectedChannelId) {
+        if (channels.isEmpty() || selectedChannelId == -1) return@LaunchedEffect
+        val index = channels.indexOfFirst { it.id == selectedChannelId }
+        if (index >= 0) channelListState.scrollToItem((index - 3).coerceAtLeast(0))
     }
 
     Column(
@@ -111,9 +108,16 @@ fun ChannelsScreen(
 
             Column(Modifier.weight(1f)) {
                 Text(
-                    stringResource(R.string.channel_list),
+                    text = stringResource(R.string.epg_title),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = selectedChannel?.name ?: "—",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -122,34 +126,32 @@ fun ChannelsScreen(
 
         Row(Modifier.fillMaxSize()) {
 
-
+            // LEFT: Channels list
             Surface(
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier
                     .fillMaxHeight()
-                    .weight(0.48f)
+                    .weight(0.40f)
             ) {
                 LazyColumn(
-                    state = listState,
+                    state = channelListState,
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
                     itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
-                        val isFocused = ch.id == focusedChannelId
+                        val focused = ch.id == selectedChannelId
                         val now =
                             remember(ch.id, nowSec) { channelViewModel.nowEvent(ch.id, nowSec) }
                         val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
 
-                        ChannelRow(
+                        ChannelPickRow(
                             number = index + 1,
                             name = ch.name,
-                            programTitle = now?.title ?: stringResource(R.string.no_epg),
+                            nowTitle = now?.title,
                             progress = if (now != null) progress else null,
-                            focused = isFocused,
-                            onFocus = { focusedChannelId = ch.id },
-                            onConfirm = {
-                                onPlay(ch.id, ch.id, ch.name)
-                            }
+                            focused = focused,
+                            onFocus = { selectedChannelId = ch.id },
+                            onConfirm = { selectedChannelId = ch.id }
                         )
 
                         HorizontalDivider(
@@ -162,18 +164,22 @@ fun ChannelsScreen(
 
             Spacer(Modifier.width(12.dp))
 
+            // RIGHT: EPG list for selected channel
             Surface(
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier
                     .fillMaxHeight()
-                    .weight(0.52f)
+                    .weight(0.60f)
             ) {
-                EpgDetailPane(
-                    channelName = focusedChannel?.name ?: "—",
-                    now = focusedNow,
+                EpgListPane(
+                    channelName = selectedChannel?.name ?: "—",
                     nowSec = nowSec,
-                    next = focusedNext,
+                    epg = epg,
+                    onPlay = {
+                        val ch = selectedChannel ?: return@EpgListPane
+                        onPlay(ch.id, ch.id, ch.name)
+                    }
                 )
             }
         }
@@ -181,10 +187,10 @@ fun ChannelsScreen(
 }
 
 @Composable
-private fun ChannelRow(
+private fun ChannelPickRow(
     number: Int,
     name: String,
-    programTitle: String,
+    nowTitle: String?,
     progress: Float?,
     focused: Boolean,
     onFocus: () -> Unit,
@@ -200,10 +206,8 @@ private fun ChannelRow(
         Modifier
             .fillMaxWidth()
             .background(bg)
-
             .onFocusChanged { if (it.isFocused) onFocus() }
             .focusable()
-
             .onKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyUp &&
                     (ev.key == Key.Enter || ev.key == Key.NumPadEnter || ev.key == Key.DirectionCenter)
@@ -212,7 +216,6 @@ private fun ChannelRow(
                     true
                 } else false
             }
-
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -249,7 +252,7 @@ private fun ChannelRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = programTitle,
+                    text = nowTitle ?: stringResource(R.string.no_epg),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -272,137 +275,140 @@ private fun ChannelRow(
 }
 
 @Composable
-private fun EpgDetailPane(
+private fun EpgListPane(
     channelName: String,
-    now: EpgEventEntry?,
-    next: EpgEventEntry?,   // <- NOVÉ
     nowSec: Long,
-    piconUrl: String? = null // <- do budoucna tvheadend picon
+    epg: List<EpgEventEntry>,
+    onPlay: () -> Unit
 ) {
+    val listState = rememberLazyListState()
 
-    val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
+    // Scroll near "now" when list changes / time moves a lot
+    LaunchedEffect(channelName, epg) {
+        val idxNow = epg.indexOfFirst { it.start <= nowSec && nowSec < it.stop }
+        if (idxNow >= 0) listState.scrollToItem((idxNow - 2).coerceAtLeast(0))
+    }
 
-    Column(Modifier.padding(14.dp)) {
-
-        // ===== TOP ROW =====
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(14.dp)
+    ) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = channelName,
-                    style = MaterialTheme.typography.titleLarge
-                )
-
-                Spacer(Modifier.height(4.dp))
-
-                Text(
-                    text = now?.title ?: stringResource(R.string.no_epg),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            Text(
+                text = stringResource(R.string.epg_schedule),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onPlay) {
+                Text(stringResource(R.string.play))
             }
+        }
 
-            // ===== RIGHT ICON / PICON =====
-            Box(
-                modifier = Modifier
-                    .width(92.dp)
-                    .height(64.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (piconUrl != null) {
-                    // TODO: Coil/AsyncImage
-                    // AsyncImage(model = piconUrl, contentDescription = null)
-                } else {
-                    Text("📺", style = MaterialTheme.typography.displayMedium)
+        Spacer(Modifier.height(8.dp))
+
+        if (epg.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.epg_loading),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
+            return
         }
 
-        Spacer(Modifier.height(10.dp))
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(vertical = 6.dp)
+        ) {
+            itemsIndexed(epg, key = { _, e -> e.eventId }) { _, e ->
+                val isNow = e.start <= nowSec && nowSec < e.stop
+                val progress = remember(e, nowSec) { if (isNow) e.progress(nowSec) else 0f }
 
-        // ===== PROGRESS + TIME =====
-        if (now != null) {
-            val start = remember(now) { now.start }
-            val end = remember(now) { now.stop }
-            val durMin = ((end - start) / 60).coerceAtLeast(0)
-
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(
-                        R.string.epg_time_duration,
-                        formatHm(start),
-                        formatHm(end),
-                        durMin.toInt()
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(MaterialTheme.shapes.small)
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // ===== SUMMARY =====
-        if (now?.summary != null) {
-            Text(
-                text = now.summary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 6,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        // ===== NEXT SHOW RIGHT BOTTOM =====
-        if (next != null) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.End
-            ) {
-
-                Text(
-                    text = stringResource(R.string.epg_next, formatHm(next.start)),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                EpgRow(
+                    event = e,
+                    now = isNow,
+                    progress = if (isNow) progress else null
                 )
 
-                Spacer(Modifier.height(2.dp))
-
-                Text(
-                    text = next.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                 )
             }
         }
     }
 }
 
+@Composable
+private fun EpgRow(
+    event: EpgEventEntry,
+    now: Boolean,
+    progress: Float?
+) {
+    val bg = if (now) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    else MaterialTheme.colorScheme.surface
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .padding(vertical = 10.dp, horizontal = 10.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "${formatHm(event.start)}–${formatHm(event.stop)}",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (now) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(120.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = event.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!event.summary.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = event.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        if (progress != null) {
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(MaterialTheme.shapes.small)
+            )
+        }
+    }
+}
+
 private fun formatHm(unixSec: Long): String {
     val ms = unixSec * 1000L
-    val cal = java.util.Calendar.getInstance().apply { timeInMillis = ms }
-    val h = cal.get(java.util.Calendar.HOUR_OF_DAY)
-    val m = cal.get(java.util.Calendar.MINUTE)
+    val cal = Calendar.getInstance().apply { timeInMillis = ms }
+    val h = cal.get(Calendar.HOUR_OF_DAY)
+    val m = cal.get(Calendar.MINUTE)
     return "%02d:%02d".format(h, m)
 }

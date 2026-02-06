@@ -15,7 +15,6 @@
     <!-- EPG detail line -->
     <string name="epg_time_duration">Time: %1$s – %2$s • Duration: %3$d min</string>
 
-
     <!-- Settings screen -->
     <string name="settings_title">Settings</string>
     <string name="host">Host</string>
@@ -42,4 +41,20 @@
     <!-- Common -->
     <string name="close">Close</string>
 
+
+    <!-- ===== EPG ===== -->
+    <string name="epg_title">EPG</string>
+    <string name="epg_schedule">Schedule</string>
+    <string name="epg_loading">Loading EPG…</string>
+
+    <string name="play">Play</string>
+
+    <string name="tvh_target_invalid">Streaming target invalid</string>
+    <string name="tvh_no_free_adapter">No free tuner available</string>
+    <string name="tvh_mux_not_enabled">Mux not enabled</string>
+    <string name="tvh_tuning_failed">Tuning failed</string>
+    <string name="tvh_bad_signal">Bad signal</string>
+    <string name="tvh_scrambled">Channel is scrambled</string>
+    <string name="tvh_subscription_overridden">Subscription overridden</string>
+    <string name="tvh_no_input">No input</string>
 </resources>

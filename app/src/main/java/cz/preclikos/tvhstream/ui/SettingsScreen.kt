@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -23,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,15 +36,17 @@ import androidx.compose.ui.unit.dp
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
-import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
     settingsStore: SettingsStore,
     passwordStore: SecurePasswordStore,
+    onOpenDrawer: () -> Unit,
     onDone: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+
     var host by rememberSaveable { mutableStateOf("") }
     var port by rememberSaveable { mutableStateOf("9982") }
     var user by rememberSaveable { mutableStateOf("") }
@@ -65,11 +69,18 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Row {
+            DrawerMenuButton(
+                onClick = onOpenDrawer
+            )
+
+            Text(
+                text = stringResource(R.string.settings_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(top = 10.dp) // aby to sedělo výškově s ikonou
+            )
+        }
 
         Column {
             OutlinedTextField(
@@ -102,7 +113,7 @@ fun SettingsScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 val p = port.toIntOrNull() ?: 9982
-                MainScope().launch {
+                scope.launch {
                     settingsStore.saveServer(host, p, user, auto)
                     passwordStore.setPassword(pass)
                     onDone()

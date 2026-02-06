@@ -38,4 +38,20 @@
 
     <!-- Common -->
     <string name="close">Zavřít</string>
+
+    <!-- ===== EPG ===== -->
+    <string name="epg_title">Program</string>
+    <string name="epg_schedule">Program vysílání</string>
+    <string name="epg_loading">Načítání programu…</string>
+
+    <string name="play">Přehrát</string>
+
+    <string name="tvh_target_invalid">Neplatný cíl streamu</string>
+    <string name="tvh_no_free_adapter">Není volný tuner</string>
+    <string name="tvh_mux_not_enabled">Mux není povolen</string>
+    <string name="tvh_tuning_failed">Ladění selhalo</string>
+    <string name="tvh_bad_signal">Špatný signál</string>
+    <string name="tvh_scrambled">Kanál je kódovaný</string>
+    <string name="tvh_subscription_overridden">Příjem byl přepsán</string>
+    <string name="tvh_no_input">Není vstup</string>
 </resources>
