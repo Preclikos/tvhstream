@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -42,7 +41,6 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     settingsStore: SettingsStore,
     passwordStore: SecurePasswordStore,
-    onOpenDrawer: () -> Unit,
     onDone: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -69,18 +67,12 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row {
-            DrawerMenuButton(
-                onClick = onOpenDrawer
-            )
-
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(top = 10.dp) // aby to sedělo výškově s ikonou
-            )
-        }
+        Text(
+            text = stringResource(R.string.settings_title),
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(top = 10.dp) // aby to sedělo výškově s ikonou
+        )
 
         Column {
             OutlinedTextField(

@@ -23,6 +23,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,7 +58,6 @@ import org.koin.androidx.compose.koinViewModel
 fun ChannelsScreen(
     channelViewModel: ChannelsViewModel = koinViewModel(),
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit,
-    onOpenDrawer: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     val channels by channelViewModel.channels.collectAsState()
@@ -105,16 +105,15 @@ fun ChannelsScreen(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DrawerMenuButton(
-                onClick = onOpenDrawer
-            )
-
             Column(Modifier.weight(1f)) {
                 Text(
                     stringResource(R.string.channel_list),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+            }
+            TextButton(onClick = onOpenSettings) {
+                Text(stringResource(R.string.options))
             }
         }
 
