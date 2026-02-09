@@ -2,6 +2,8 @@ package cz.preclikos.tvhstream.ui
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -9,7 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -17,8 +22,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import cz.preclikos.tvhstream.settings.SecurePasswordStore
-import cz.preclikos.tvhstream.settings.SettingsStore
 import cz.preclikos.tvhstream.ui.components.InfoBanner
 import cz.preclikos.tvhstream.ui.components.SideRail
 import cz.preclikos.tvhstream.ui.player.VideoPlayerScreen
@@ -27,7 +30,6 @@ import cz.preclikos.tvhstream.ui.screens.EpgGridScreen
 import cz.preclikos.tvhstream.ui.screens.SettingsScreen
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
 import org.koin.androidx.compose.koinViewModel
-import org.koin.compose.koinInject
 
 object Routes {
     const val CHANNELS = "channels"
@@ -36,6 +38,22 @@ object Routes {
     const val PLAYER = "player"
     fun player(channelId: Int, serviceId: Int, channelName: String) =
         "player/$channelId/$serviceId/${android.net.Uri.encode(channelName)}"
+}
+
+@Composable
+fun ContentContainer(
+    contentFocus: FocusRequester,
+    content: @Composable () -> Unit
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .focusGroup()
+            .focusable()
+            .focusRequester(contentFocus)
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -48,9 +66,14 @@ fun AppRoot() {
     val status by appVm.status.collectAsState()
 
     val backStackEntry by nav.currentBackStackEntryAsState()
+
+    val contentFocus = remember { FocusRequester() }
     val currentRoute = backStackEntry?.destination?.route
     val topRoute = currentRoute?.substringBefore("/")
     val showRail = topRoute != Routes.PLAYER
+
+    val isPlayer = currentRoute?.startsWith(Routes.PLAYER) == true
+
 
     BackHandler {
         when (currentRoute) {
@@ -72,10 +95,15 @@ fun AppRoot() {
             SideRail(
                 currentRoute = topRoute,
                 onNavigate = { route ->
-                    nav.navigate(route) {
-                        popUpTo(Routes.CHANNELS) { inclusive = false }
-                        launchSingleTop = true
-                        restoreState = true
+                    val current = nav.currentBackStackEntry?.destination?.route
+                    if (current == route) {
+                        if (!isPlayer) contentFocus.requestFocus()
+                    } else {
+                        nav.navigate(route) {
+                            popUpTo(Routes.CHANNELS) { inclusive = false }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 }
             )
@@ -86,32 +114,37 @@ fun AppRoot() {
                 .weight(1f)
                 .fillMaxHeight()
         ) {
-            NavHost(navController = nav, startDestination = Routes.CHANNELS) {
+            NavHost(
+                navController = nav,
+                startDestination = Routes.CHANNELS,
+            ) {
 
                 composable(Routes.CHANNELS) {
-                    ChannelsScreen(
-                        onPlay = { channelId, serviceId, name ->
-                            nav.navigate(Routes.player(channelId, serviceId, name))
-                        }
-                    )
+                    ContentContainer(contentFocus) {
+                        ChannelsScreen(
+                            onPlay = { channelId, serviceId, name ->
+                                nav.navigate(Routes.player(channelId, serviceId, name))
+                            }
+                        )
+                    }
                 }
 
                 composable(Routes.EPG) {
-                    EpgGridScreen(
-                        onPlay = { channelId, serviceId, name ->
-                            nav.navigate(Routes.player(channelId, serviceId, name))
-                        }
-                    )
+                    ContentContainer(contentFocus) {
+                        EpgGridScreen(
+                            onPlay = { channelId, serviceId, name ->
+                                nav.navigate(Routes.player(channelId, serviceId, name))
+                            }
+                        )
+                    }
                 }
 
                 composable(Routes.SETTINGS) {
-                    val settings: SettingsStore = koinInject()
-                    val passwords: SecurePasswordStore = koinInject()
-                    SettingsScreen(
-                        settingsStore = settings,
-                        passwordStore = passwords,
-                        onDone = { nav.popBackStack() }
-                    )
+                    ContentContainer(contentFocus) {
+                        SettingsScreen(
+                            onDone = { nav.popBackStack() }
+                        )
+                    }
                 }
 
                 composable(

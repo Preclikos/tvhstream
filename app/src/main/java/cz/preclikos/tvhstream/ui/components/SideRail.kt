@@ -118,7 +118,10 @@ fun SideRail(
                 label = item.label,
                 icon = item.icon,
                 focusRequester = itemFocus.getValue(item.route),
-                onClick = { onNavigate(item.route) }
+                onClick = {
+                    railFocused = false
+                    onNavigate(item.route)
+                }
             )
         }
 
@@ -160,10 +163,17 @@ private fun SideRailItem(
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyUp &&
-                    (ev.key == Key.Enter || ev.key == Key.NumPadEnter || ev.key == Key.DirectionCenter)
+                if (ev.type == KeyEventType.KeyDown &&
+                    (
+                            ev.key == Key.Enter ||
+                                    ev.key == Key.NumPadEnter ||
+                                    ev.key == Key.DirectionCenter ||
+                                    ev.key == Key.DirectionRight ||
+                                    ev.key == Key.ButtonThumbRight
+                            )
                 ) {
-                    onClick(); true
+                    onClick()
+                    true
                 } else false
             }
             .clickable(

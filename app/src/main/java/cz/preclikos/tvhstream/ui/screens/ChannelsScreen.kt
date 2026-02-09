@@ -1,8 +1,8 @@
 package cz.preclikos.tvhstream.ui.screens
 
-import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -28,15 +28,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -47,7 +51,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.util.UnstableApi
 import coil3.ImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
@@ -55,28 +58,47 @@ import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
+import cz.preclikos.tvhstream.stores.ChannelSelectionStore
+import cz.preclikos.tvhstream.ui.common.formatHm
 import cz.preclikos.tvhstream.ui.components.PiconBox
 import cz.preclikos.tvhstream.ui.player.progress
 import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
-import java.util.Calendar
 
-@OptIn(UnstableApi::class)
 @Composable
 fun ChannelsScreen(
     channelViewModel: ChannelsViewModel = koinViewModel(),
+    selection: ChannelSelectionStore = koinInject(),
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit
 ) {
     val channels by channelViewModel.channels.collectAsState()
+    val selectedId by selection.selectedId.collectAsState()
+    var didInitialRestore by remember { mutableStateOf(false) }
+    var isRestoring by remember { mutableStateOf(false) }
 
     val imageLoader = rememberTvhImageLoader()
     val baseUrl = rememberTvhBaseUrl()
 
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
+
+    val listState = rememberLazyListState()
+
+    val selectedRowFocus = remember { FocusRequester() }
+
+    val focusedChannel = channels.firstOrNull { it.id == selectedId }
+    val focusedNow = remember(selectedId, nowSec) {
+        focusedChannel?.let { channelViewModel.nowEvent(it.id, nowSec) }
+    }
+    val focusedNext = remember(selectedId, nowSec) {
+        focusedChannel?.let { channelViewModel.nextEvent(it.id, nowSec) }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             nowSec = System.currentTimeMillis() / 1000L
@@ -84,29 +106,33 @@ fun ChannelsScreen(
         }
     }
 
-    var focusedChannelId by rememberSaveable { mutableIntStateOf(-1) }
-
     LaunchedEffect(channels) {
-        if (channels.isNotEmpty() && focusedChannelId == -1) {
-            focusedChannelId = channels.first().id
-        }
+        if (channels.isEmpty()) return@LaunchedEffect
+        if (selectedId == -1) selection.setSelected(channels.first().id)
     }
 
-    val focusedChannel = channels.firstOrNull { it.id == focusedChannelId }
-    val focusedNow = remember(focusedChannelId, nowSec) {
-        focusedChannel?.let { channelViewModel.nowEvent(it.id, nowSec) }
-    }
-    val focusedNext = remember(focusedChannelId, nowSec) {
-        focusedChannel?.let { channelViewModel.nextEvent(it.id, nowSec) }
-    }
-    val listState = rememberLazyListState()
+    LaunchedEffect(channels, selectedId) {
+        if (didInitialRestore) return@LaunchedEffect
+        if (channels.isEmpty()) return@LaunchedEffect
 
-    LaunchedEffect(channels) {
-        if (channels.isEmpty() || focusedChannelId == -1) return@LaunchedEffect
-        val index = channels.indexOfFirst { it.id == focusedChannelId }
-        if (index >= 0) {
-            listState.scrollToItem((index - 3).coerceAtLeast(0))
-        }
+        val id = if (selectedId == -1) channels.first().id else selectedId
+        val idx = channels.indexOfFirst { it.id == id }
+        if (idx < 0) return@LaunchedEffect
+
+        isRestoring = true
+
+        listState.scrollToItem(idx)
+
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.any { it.key == id }
+        }.filter { it }.first()
+
+        withFrameNanos { }
+        selectedRowFocus.requestFocus()
+        withFrameNanos { }
+
+        didInitialRestore = true
+        isRestoring = false
     }
 
     Column(
@@ -115,10 +141,7 @@ fun ChannelsScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(14.dp)
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
                     stringResource(R.string.channel_list),
@@ -131,8 +154,6 @@ fun ChannelsScreen(
         Spacer(Modifier.height(10.dp))
 
         Row(Modifier.fillMaxSize()) {
-
-
             Surface(
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.medium,
@@ -142,24 +163,28 @@ fun ChannelsScreen(
             ) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    modifier = Modifier
+                        .focusGroup()
+                        .focusRestorer()
                 ) {
                     itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
-                        val isFocused = ch.id == focusedChannelId
+                        val isSelected = ch.id == selectedId
                         val now =
                             remember(ch.id, nowSec) { channelViewModel.nowEvent(ch.id, nowSec) }
-                        val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
+                        val prog = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
 
                         ChannelRow(
+                            modifier = if (isSelected) Modifier.focusRequester(selectedRowFocus) else Modifier,
                             number = index + 1,
                             name = ch.name,
                             programTitle = now?.title ?: stringResource(R.string.no_epg),
-                            progress = if (now != null) progress else null,
-                            focused = isFocused,
-                            onFocus = { focusedChannelId = ch.id },
-                            onConfirm = {
-                                onPlay(ch.id, ch.id, ch.name)
-                            }
+                            progress = if (now != null) prog else null,
+                            focused = isSelected,
+                            onFocus = {
+                                if (!isRestoring) selection.setSelected(ch.id)
+                            },
+                            onConfirm = { onPlay(ch.id, ch.id, ch.name) }
                         )
 
                         HorizontalDivider(
@@ -195,6 +220,7 @@ fun ChannelsScreen(
 
 @Composable
 private fun ChannelRow(
+    modifier: Modifier = Modifier,
     number: Int,
     name: String,
     programTitle: String,
@@ -210,32 +236,26 @@ private fun ChannelRow(
     else MaterialTheme.colorScheme.outlineVariant
 
     Column(
-        Modifier
+        modifier
             .fillMaxWidth()
             .background(bg)
-
             .onFocusChanged { if (it.isFocused) onFocus() }
             .focusable()
-
             .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyUp &&
+                if (ev.type == KeyEventType.KeyDown &&
                     (ev.key == Key.Enter || ev.key == Key.NumPadEnter || ev.key == Key.DirectionCenter)
                 ) {
                     onConfirm()
                     true
                 } else false
             }
-
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onConfirm() }
             .padding(vertical = 10.dp, horizontal = 10.dp)
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
                     .width(4.dp)
@@ -350,13 +370,8 @@ private fun EpgDetailPane(
     piconPath: String? = null,
 ) {
     val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
-    val piconUrl = remember(baseUrl, piconPath) {
-        if (baseUrl.isBlank() || piconPath.isNullOrBlank()) null
-        else "$baseUrl/$piconPath"
-    }
     Column(Modifier.padding(14.dp)) {
 
-        // ===== TOP ROW =====
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -377,7 +392,6 @@ private fun EpgDetailPane(
                 )
             }
 
-            // ===== RIGHT ICON / PICON =====
             Box(
                 modifier = Modifier
                     .width(92.dp)
@@ -390,7 +404,6 @@ private fun EpgDetailPane(
 
         Spacer(Modifier.height(10.dp))
 
-        // ===== PROGRESS + TIME =====
         if (now != null) {
             val start = remember(now) { now.start }
             val end = remember(now) { now.stop }
@@ -426,7 +439,6 @@ private fun EpgDetailPane(
 
         Spacer(Modifier.height(16.dp))
 
-        // ===== SUMMARY =====
         if (now?.summary != null) {
             Text(
                 text = now.summary,
@@ -439,7 +451,6 @@ private fun EpgDetailPane(
 
         Spacer(Modifier.weight(1f))
 
-        // ===== NEXT SHOW RIGHT BOTTOM =====
         if (next != null) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -464,12 +475,4 @@ private fun EpgDetailPane(
             }
         }
     }
-}
-
-private fun formatHm(unixSec: Long): String {
-    val ms = unixSec * 1000L
-    val cal = Calendar.getInstance().apply { timeInMillis = ms }
-    val h = cal.get(Calendar.HOUR_OF_DAY)
-    val m = cal.get(Calendar.MINUTE)
-    return "%02d:%02d".format(h, m)
 }

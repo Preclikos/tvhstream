@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui.screens
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -35,15 +38,19 @@ import androidx.compose.ui.unit.dp
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 @Composable
 fun SettingsScreen(
-    settingsStore: SettingsStore,
-    passwordStore: SecurePasswordStore,
+    settingsStore: SettingsStore = koinInject(),
+    passwordStore: SecurePasswordStore = koinInject(),
     onDone: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+
+    val hostFocus = remember { FocusRequester() }
 
     var host by rememberSaveable { mutableStateOf("") }
     var htspPort by rememberSaveable { mutableStateOf("9982") }
@@ -52,15 +59,19 @@ fun SettingsScreen(
     var pass by rememberSaveable { mutableStateOf("") }
     var auto by rememberSaveable { mutableStateOf(true) }
 
+    var didInit by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        settingsStore.serverSettings.collect { s ->
-            host = s.host
-            htspPort = s.htspPort.toString()
-            httpPort = s.httpPort.toString()
-            user = s.username
-            pass = passwordStore.getPassword()
-            return@collect
-        }
+        if (didInit) return@LaunchedEffect
+        didInit = true
+
+        val s = settingsStore.serverSettings.first()
+        host = s.host
+        htspPort = s.htspPort.toString()
+        httpPort = s.httpPort.toString()
+        user = s.username
+        pass = passwordStore.getPassword()
+
+        hostFocus.requestFocus()
     }
 
     Column(
@@ -73,10 +84,10 @@ fun SettingsScreen(
             text = stringResource(R.string.settings_title),
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(top = 10.dp) // aby to sedělo výškově s ikonou
+            modifier = Modifier.padding(top = 10.dp)
         )
 
-        Column {
+        Column(modifier = Modifier.focusGroup()) {
             OutlinedTextField(
                 value = host,
                 onValueChange = { host = it },
@@ -120,7 +131,7 @@ fun SettingsScreen(
                     passwordStore.setPassword(pass)
                     onDone()
                 }
-            }) {
+            }, modifier = Modifier.focusRequester(hostFocus)) {
                 Text(stringResource(R.string.save))
             }
 

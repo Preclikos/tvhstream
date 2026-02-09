@@ -68,6 +68,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
+import cz.preclikos.tvhstream.ui.common.formatClock
+import cz.preclikos.tvhstream.ui.common.formatHms
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
@@ -491,18 +493,3 @@ private fun EpgEventEntry.timeRangeText(): String? {
     return "$s–$e"
 }
 
-private val clockFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("HH:mm")
-
-private fun formatClock(epochSec: Long): String {
-    val z = ZoneId.systemDefault()
-    return Instant.ofEpochSecond(epochSec).atZone(z).format(clockFormatter)
-}
-
-private fun formatHms(sec: Long): String {
-    val s = sec.coerceAtLeast(0L)
-    val h = (s / 3600).toInt()
-    val m = ((s % 3600) / 60).toInt()
-    val ss = (s % 60).toInt()
-    return if (h > 0) "%d:%02d:%02d".format(h, m, ss) else "%02d:%02d".format(m, ss)
-}
