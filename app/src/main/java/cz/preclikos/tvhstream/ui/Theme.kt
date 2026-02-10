@@ -11,13 +11,13 @@ import androidx.compose.ui.graphics.Color
 private val DarkColors = darkColorScheme(
 
     primary = Color(0xFF4FA3FF),
-    onPrimary = Color(0xFFFFFFFF),              // ✅ text na modré = bílý
+    onPrimary = Color(0xFFFFFFFF),
 
     primaryContainer = Color(0xFF143A66),
     onPrimaryContainer = Color(0xFFE6EAF0),
 
     secondary = Color(0xFF9CC9FF),
-    onSecondary = Color(0xFF001B33),            // sekundární bývá na světlém pozadí; ale v dark UI ho často použiješ taky
+    onSecondary = Color(0xFF001B33),
     secondaryContainer = Color(0xFF20324A),
     onSecondaryContainer = Color(0xFFE6EAF0),
 

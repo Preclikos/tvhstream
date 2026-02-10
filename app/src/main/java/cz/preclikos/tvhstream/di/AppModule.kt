@@ -1,6 +1,5 @@
 package cz.preclikos.tvhstream.di
 
-import androidx.lifecycle.SavedStateHandle
 import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.player.PlayerSession
 import cz.preclikos.tvhstream.repositories.TvhRepository
@@ -50,5 +49,5 @@ val appModule = module {
         )
     }
     viewModel { VideoPlayerViewModel(playerSession = get(), repo = get()) }
-    viewModel { (handle: SavedStateHandle) -> ChannelsViewModel(savedStateHandle = handle, repo = get()) }
+    viewModel { ChannelsViewModel(repo = get()) }
 }

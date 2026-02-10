@@ -99,7 +99,7 @@ fun EpgGridScreen(
 
     
     val slotMin = 30
-    val windowHours = 4
+    val windowHours = 24
     val windowMin = windowHours * 60
     val dpPerMin: Dp = 3.2.dp
     val rowHeight = 56.dp

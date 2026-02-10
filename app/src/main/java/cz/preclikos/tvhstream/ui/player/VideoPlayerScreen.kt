@@ -470,7 +470,7 @@ private fun Context.findActivity(): Activity? {
 
 private fun List<EpgEventEntry>.nowEvent(nowSec: Long): EpgEventEntry? =
     firstOrNull { it.start <= nowSec && nowSec < it.stop }
-        ?: minByOrNull { abs(it.start - nowSec) } // fallback, když nemáme přesně teď
+        ?: minByOrNull { abs(it.start - nowSec) }
 
 private fun List<EpgEventEntry>.nextAfter(now: EpgEventEntry?): EpgEventEntry? {
     val nowId = now?.eventId

@@ -16,7 +16,6 @@ interface StatusService {
     val sync: StateFlow<String?>
     val epg: StateFlow<String?>
 
-    // co bude UI typicky zobrazovat jako “jednu řádku”
     val headline: StateFlow<String>
 
     fun set(slot: StatusSlot, text: String?)
@@ -42,7 +41,7 @@ class StatusServiceImpl : StatusService {
                 connIsStrong -> conn
                 !s.isNullOrBlank() -> s
                 !e.isNullOrBlank() -> e
-                !conn.isNullOrBlank() -> conn  // sem spadne "Connected" jen když nic jiného není
+                !conn.isNullOrBlank() -> conn
                 else -> ""
             }
         }.stateIn(scope, SharingStarted.Eagerly, "")
