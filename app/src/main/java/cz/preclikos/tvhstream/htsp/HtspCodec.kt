@@ -160,12 +160,12 @@ object HtspCodec {
     // ----------------------------
 
     private fun readU32BE(input: InputStream): Int {
-        val b0 = input.read()
-        val b1 = input.read()
-        val b2 = input.read()
-        val b3 = input.read()
-        if ((b0 or b1 or b2 or b3) < 0) throw EOFException("EOF while reading u32")
-        return (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
+        val b = ByteArray(4)
+        readFully(input, b)
+        return ((b[0].toInt() and 0xFF) shl 24) or
+                ((b[1].toInt() and 0xFF) shl 16) or
+                ((b[2].toInt() and 0xFF) shl 8) or
+                (b[3].toInt() and 0xFF)
     }
 
     private fun writeU32BE(output: OutputStream, v: Int) {
@@ -205,13 +205,12 @@ object HtspCodec {
             return r and 0xFF
         }
 
-        fun readU32BE(input: InputStream): Int {
-            val b = ByteArray(4)
-            readFully(input, b)
-            return ((b[0].toInt() and 0xFF) shl 24) or
-                    ((b[1].toInt() and 0xFF) shl 16) or
-                    ((b[2].toInt() and 0xFF) shl 8) or
-                    (b[3].toInt() and 0xFF)
+        fun readU32BE(): Int {
+            val b0 = readU8()
+            val b1 = readU8()
+            val b2 = readU8()
+            val b3 = readU8()
+            return (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
         }
 
         fun readExactly(n: Int): ByteArray {
