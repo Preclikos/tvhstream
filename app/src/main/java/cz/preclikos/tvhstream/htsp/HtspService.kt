@@ -18,6 +18,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
+import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
@@ -244,6 +245,9 @@ class HtspService(
                     _controlEvents.tryEmit(HtspEvent.ServerMessage(msg))
                 }
             }
+        } catch (t: NoSuchElementException) {
+            failAll(EOFException("Broken/EOF HTSP stream").apply { initCause(t) })
+            return
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             failAll(t)

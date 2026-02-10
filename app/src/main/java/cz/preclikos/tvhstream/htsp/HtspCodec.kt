@@ -175,6 +175,15 @@ object HtspCodec {
         output.write(v and 0xFF)
     }
 
+    private fun readFully(input: InputStream, buf: ByteArray, off: Int = 0, len: Int = buf.size) {
+        var readTotal = 0
+        while (readTotal < len) {
+            val r = input.read(buf, off + readTotal, len - readTotal)
+            if (r == -1) throw java.io.EOFException("EOF while reading $len bytes")
+            readTotal += r
+        }
+    }
+
     // ----------------------------
     // BoundedReader (correct slice that decrements parent too)
     // ----------------------------
@@ -196,12 +205,13 @@ object HtspCodec {
             return r and 0xFF
         }
 
-        fun readU32BE(): Int {
-            val b0 = readU8()
-            val b1 = readU8()
-            val b2 = readU8()
-            val b3 = readU8()
-            return (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
+        fun readU32BE(input: InputStream): Int {
+            val b = ByteArray(4)
+            readFully(input, b)
+            return ((b[0].toInt() and 0xFF) shl 24) or
+                    ((b[1].toInt() and 0xFF) shl 16) or
+                    ((b[2].toInt() and 0xFF) shl 8) or
+                    (b[3].toInt() and 0xFF)
         }
 
         fun readExactly(n: Int): ByteArray {
