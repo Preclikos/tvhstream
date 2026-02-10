@@ -1,10 +1,7 @@
 package cz.preclikos.tvhstream.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,12 +38,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,8 +51,9 @@ import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import cz.preclikos.tvhstream.stores.ChannelSelectionStore
 import cz.preclikos.tvhstream.ui.common.formatHm
+import cz.preclikos.tvhstream.ui.common.progress
+import cz.preclikos.tvhstream.ui.components.ChannelRow
 import cz.preclikos.tvhstream.ui.components.PiconBox
-import cz.preclikos.tvhstream.ui.player.progress
 import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -214,92 +206,6 @@ fun ChannelsScreen(
                     piconPath = focusedChannel?.icon
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ChannelRow(
-    modifier: Modifier = Modifier,
-    number: Int,
-    name: String,
-    programTitle: String,
-    progress: Float?,
-    focused: Boolean,
-    onFocus: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    val bg = if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    else MaterialTheme.colorScheme.surface
-
-    val leftBar = if (focused) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.outlineVariant
-
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(bg)
-            .onFocusChanged { if (it.isFocused) onFocus() }
-            .focusable()
-            .onKeyEvent { ev ->
-                if (ev.type == KeyEventType.KeyDown &&
-                    (ev.key == Key.Enter || ev.key == Key.NumPadEnter || ev.key == Key.DirectionCenter)
-                ) {
-                    onConfirm()
-                    true
-                } else false
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onConfirm() }
-            .padding(vertical = 10.dp, horizontal = 10.dp)
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .width(4.dp)
-                    .height(34.dp)
-                    .clip(MaterialTheme.shapes.small)
-                    .background(leftBar)
-            )
-            Spacer(Modifier.width(10.dp))
-
-            Text(
-                text = number.toString().padStart(2, ' '),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(30.dp)
-            )
-
-            Spacer(Modifier.width(6.dp))
-
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = programTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        if (progress != null) {
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(MaterialTheme.shapes.small)
-            )
         }
     }
 }
