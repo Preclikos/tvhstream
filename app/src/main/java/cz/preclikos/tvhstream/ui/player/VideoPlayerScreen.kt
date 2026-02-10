@@ -105,33 +105,21 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(screenActive) {
-        if (screenActive) {
-            videoPlayerViewModel.playService(ctx, currentServiceId)
-        } else {
-            videoPlayerViewModel.stop()
-        }
-    }
-
     var lastPlayedServiceId by remember { mutableIntStateOf(-1) }
-
-    LaunchedEffect(currentServiceId, screenActive) {
-        if (!screenActive) return@LaunchedEffect
-
-        if (lastPlayedServiceId == -1) {
-            lastPlayedServiceId = currentServiceId
+    LaunchedEffect(screenActive, currentServiceId) {
+        if (!screenActive) {
+            videoPlayerViewModel.stop()
+            lastPlayedServiceId = -1
             return@LaunchedEffect
         }
 
-        if (currentServiceId != lastPlayedServiceId) {
-            videoPlayerViewModel.stop()
-            videoPlayerViewModel.playService(ctx, currentServiceId)
-            lastPlayedServiceId = currentServiceId
-        }
-    }
+        if (lastPlayedServiceId == currentServiceId) return@LaunchedEffect
 
-    LaunchedEffect(screenActive) {
-        if (!screenActive) lastPlayedServiceId = -1
+        if (lastPlayedServiceId != -1) {
+            videoPlayerViewModel.stop()
+        }
+        videoPlayerViewModel.playService(ctx, currentServiceId)
+        lastPlayedServiceId = currentServiceId
     }
 
     KeepScreenOn(enabled = true)
@@ -214,8 +202,8 @@ fun VideoPlayerScreen(
 
                     Key.Back -> {
                         when {
-                            !controlsVisible -> {
-                                showControls()
+                            controlsVisible -> {
+                                hideControls()
                                 true
                             }
 
