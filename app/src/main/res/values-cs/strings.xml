@@ -55,4 +55,14 @@
     <string name="tvh_scrambled">Kanál je kódovaný</string>
     <string name="tvh_subscription_overridden">Příjem byl přepsán</string>
     <string name="tvh_no_input">Není vstup</string>
+
+    <string name="status_epg_loading">Načítám televizní program\u2026</string>
+
+    <string name="status_epg_warmup">Program: načítám %1$d/%2$d</string>
+    <string name="status_epg_steady_warmup">Program: připraven (načteno %1$d/%2$d)</string>
+
+    <string name="status_epg_warmup_batch">Program: načítám %1$d/%2$d (aktualizováno %3$d/%4$d)</string>
+
+    <string name="status_channels_ready">Kanály připraveny: %1$d</string>
+    <string name="status_syncing_channels">Načítám kanály\u2026 %1$d</string>
 </resources>

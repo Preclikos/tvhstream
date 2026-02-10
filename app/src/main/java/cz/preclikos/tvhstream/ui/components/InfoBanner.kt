@@ -11,23 +11,27 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import cz.preclikos.tvhstream.services.UiText
 import kotlinx.coroutines.delay
 
 @Composable
 fun InfoBanner(
-    message: String,
+    message: UiText?,
     modifier: Modifier = Modifier,
     visibleMs: Long = 2500L,
 ) {
+    val ctx = LocalContext.current
+
     var visible by remember { mutableStateOf(false) }
     var lastMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(message) {
-        val trimmed = message.trim()
-        if (trimmed.isEmpty() || trimmed == lastMessage) return@LaunchedEffect
+        val resolved = message?.resolve(ctx)?.trim().orEmpty()
+        if (resolved.isEmpty() || resolved == lastMessage) return@LaunchedEffect
 
-        lastMessage = trimmed
+        lastMessage = resolved
         visible = true
         delay(visibleMs)
         visible = false
@@ -45,7 +49,6 @@ fun InfoBanner(
         ) + fadeOut(animationSpec = tween(220)),
         modifier = modifier
     ) {
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()

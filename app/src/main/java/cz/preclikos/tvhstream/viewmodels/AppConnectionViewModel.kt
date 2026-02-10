@@ -1,6 +1,6 @@
 package cz.preclikos.tvhstream.viewmodels
 
-import android.content.Context
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cz.preclikos.tvhstream.R
@@ -11,6 +11,7 @@ import cz.preclikos.tvhstream.htsp.SubscriptionStatus
 import cz.preclikos.tvhstream.repositories.TvhRepository
 import cz.preclikos.tvhstream.services.StatusService
 import cz.preclikos.tvhstream.services.StatusSlot
+import cz.preclikos.tvhstream.services.UiText
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import kotlinx.coroutines.Dispatchers
@@ -20,13 +21,13 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class AppConnectionViewModel(
-    private val context: Context,
     private val htsp: HtspService,
     private val repo: TvhRepository,
     private val statusService: StatusService,
     private val settings: SettingsStore,
     private val passwords: SecurePasswordStore
 ) : ViewModel() {
+
     val status = statusService.headline
 
     private data class ServerCfg(
@@ -41,6 +42,8 @@ class AppConnectionViewModel(
     private var lastCfg: ServerCfg? = null
     private var reconnectJob: Job? = null
     private var autoJob: Job? = null
+
+    private val subs = mutableMapOf<Int, SubscriptionStatus>()
 
     init {
         repo.startIfNeeded()
@@ -65,11 +68,14 @@ class AppConnectionViewModel(
             htsp.controlEvents.collectLatest { e ->
                 when (e) {
                     is HtspEvent.ConnectionError -> {
-                        statusService.set(StatusSlot.CONNECTION, "Disconnected. Reconnecting…")
+                        statusService.set(
+                            StatusSlot.CONNECTION,
+                            UiText.Plain("Disconnected. Reconnecting…")
+                        )
                         repo.onDisconnected()
                         startOrRestartReconnectLoop()
                     }
-                    // pokud je to přímo HtspMessage jako event:
+
                     is HtspEvent.ServerMessage -> {
                         val msg = e.msg
 
@@ -90,22 +96,20 @@ class AppConnectionViewModel(
         }
     }
 
-    private val subs = mutableMapOf<Int, SubscriptionStatus>()
-
     private fun publishSubsStatus() {
-        val msg = subs.values.computeUiStatus(context)
-        if (msg == null) statusService.set(StatusSlot.CONNECTION, null)
-        else statusService.set(StatusSlot.CONNECTION, msg)
+        val resId = subs.values.computeUiStatusResId()
+        if (resId == null) {
+            statusService.set(StatusSlot.CONNECTION, null)
+        } else {
+            statusService.set(StatusSlot.CONNECTION, UiText.Res(resId))
+        }
     }
-
 
     private fun HtspMessage.toSubStatusOrNull(): SubscriptionStatus? {
         val m = method ?: return null
         if (m != "subscriptionStatus" && m != "subscriptionStart") return null
 
-        val id = int("subscriptionId")
-            ?: int("id")
-            ?: return null
+        val id = int("subscriptionId") ?: int("id") ?: return null
 
         return SubscriptionStatus(
             id = id,
@@ -120,7 +124,8 @@ class AppConnectionViewModel(
         return int("subscriptionId") ?: int("id")
     }
 
-    private fun Collection<SubscriptionStatus>.computeUiStatus(ctx: Context): String? {
+    @StringRes
+    private fun Collection<SubscriptionStatus>.computeUiStatusResId(): Int? {
         if (isEmpty()) return null
 
         fun norm(v: String?): String =
@@ -129,31 +134,16 @@ class AppConnectionViewModel(
         for (s in this) {
             val code = norm(s.subscriptionError ?: s.state)
 
-            when {
-                "invalidtarget" in code ->
-                    return ctx.getString(R.string.tvh_target_invalid)
-
-                "nofreeadapter" in code ->
-                    return ctx.getString(R.string.tvh_no_free_adapter)
-
-                "muxnotenabled" in code ->
-                    return ctx.getString(R.string.tvh_mux_not_enabled)
-
-                "tuningfailed" in code ->
-                    return ctx.getString(R.string.tvh_tuning_failed)
-
-                "badsignal" in code ->
-                    return ctx.getString(R.string.tvh_bad_signal)
-
-                "scrambled" in code ->
-                    return ctx.getString(R.string.tvh_scrambled)
-
-                "subscriptionoverridden" in code ->
-                    return ctx.getString(R.string.tvh_subscription_overridden)
-
-                // fallback starší texty
-                "noinput" in code ->
-                    return ctx.getString(R.string.tvh_no_input)
+            return when {
+                "invalidtarget" in code -> R.string.tvh_target_invalid
+                "nofreeadapter" in code -> R.string.tvh_no_free_adapter
+                "muxnotenabled" in code -> R.string.tvh_mux_not_enabled
+                "tuningfailed" in code -> R.string.tvh_tuning_failed
+                "badsignal" in code -> R.string.tvh_bad_signal
+                "scrambled" in code -> R.string.tvh_scrambled
+                "subscriptionoverridden" in code -> R.string.tvh_subscription_overridden
+                "noinput" in code -> R.string.tvh_no_input
+                else -> continue
             }
         }
 
@@ -175,15 +165,13 @@ class AppConnectionViewModel(
                 )
                 if (ok) return@launch
 
-                statusService.set(StatusSlot.CONNECTION, "Reconnect in 5s…")
+                statusService.set(StatusSlot.CONNECTION, UiText.Plain("Reconnect in 5s…"))
                 kotlinx.coroutines.delay(5_000)
             }
         }
     }
 
-    fun reconnectNow() {
-        startOrRestartReconnectLoop()
-    }
+    fun reconnectNow() = startOrRestartReconnectLoop()
 
     fun connectOnceFromUi(
         host: String,
@@ -205,24 +193,26 @@ class AppConnectionViewModel(
         return try {
             statusService.set(StatusSlot.SYNC, null)
             statusService.set(StatusSlot.EPG, null)
-            statusService.set(StatusSlot.CONNECTION, "Connecting to $host:$port")
+            statusService.set(StatusSlot.CONNECTION, UiText.Plain("Connecting to $host:$port"))
 
             repo.onNewConnectionStarting()
 
             htsp.connect(host, port, username, password)
-            statusService.set(StatusSlot.CONNECTION, "Connected")
+            statusService.set(StatusSlot.CONNECTION, UiText.Plain("Connected"))
 
-            statusService.set(StatusSlot.SYNC, "Syncing…")
+            statusService.set(StatusSlot.SYNC, UiText.Plain("Syncing…"))
             htsp.enableAsyncMetadataAndWaitInitialSync()
 
             repo.awaitChannelsReady()
-
             repo.startEpgWorker()
 
             true
         } catch (e: Exception) {
             Timber.e(e, "Connect failed")
-            statusService.set(StatusSlot.CONNECTION, "Connection failed: ${e.message ?: e}")
+            statusService.set(
+                StatusSlot.CONNECTION,
+                UiText.Plain("Connection failed: ${e.message ?: e}")
+            )
             false
         }
     }

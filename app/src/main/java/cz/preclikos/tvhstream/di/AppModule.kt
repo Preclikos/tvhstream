@@ -40,7 +40,6 @@ val appModule = module {
 
     viewModel {
         AppConnectionViewModel(
-            context = androidContext(),
             htsp = get(),
             repo = get(),
             settings = get(),

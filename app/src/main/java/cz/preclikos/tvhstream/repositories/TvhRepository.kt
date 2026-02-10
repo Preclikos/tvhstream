@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.repositories
 
+import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.ChannelUi
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.htsp.HtspEvent
@@ -7,6 +8,7 @@ import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.services.StatusService
 import cz.preclikos.tvhstream.services.StatusSlot
+import cz.preclikos.tvhstream.services.UiText
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -92,7 +94,7 @@ class TvhRepository(
 
     private var lastStatusMs = 0L
     private fun setStatusThrottled(
-        text: String,
+        text: UiText,
         slot: StatusSlot = StatusSlot.EPG,
         minIntervalMs: Long = 700L
     ) {
@@ -103,7 +105,7 @@ class TvhRepository(
         }
     }
 
-    private fun setStatus(text: String, slot: StatusSlot = StatusSlot.SYNC) {
+    private fun setStatus(text: UiText, slot: StatusSlot = StatusSlot.SYNC) {
         statusService.set(slot, text)
     }
 
@@ -206,7 +208,7 @@ class TvhRepository(
         if (epgWorkerJob?.isActive == true) return
 
         epgWorkerJob = scope.launch {
-            setStatus("EPG loading…", StatusSlot.EPG)
+            setStatus(UiText.Res(R.string.status_epg_loading), StatusSlot.EPG)
 
             while (isActive) {
                 val nowSec = nowSec()
@@ -222,13 +224,13 @@ class TvhRepository(
                     val (warmDone, total) = stateMutex.withLock { warmupProgressLocked(nowSec) }
                     if (total > 0 && warmDone >= total) {
                         setStatusThrottled(
-                            "EPG steady (warmup $warmDone/$total)",
+                            UiText.Res(R.string.status_epg_steady_warmup, listOf(warmDone, total)),
                             StatusSlot.EPG,
                             minIntervalMs = 2_000
                         )
                     } else if (total > 0) {
                         setStatusThrottled(
-                            "EPG warmup $warmDone/$total",
+                            UiText.Res(R.string.status_epg_warmup, listOf(warmDone, total)),
                             StatusSlot.EPG,
                             minIntervalMs = 1_000
                         )
@@ -247,7 +249,10 @@ class TvhRepository(
 
                 val (warmDone, total) = stateMutex.withLock { warmupProgressLocked(nowSec) }
                 setStatusThrottled(
-                    "EPG: warmup $warmDone/$total (batch $ok/${targets.size})",
+                    UiText.Res(
+                        R.string.status_epg_warmup_batch,
+                        listOf(warmDone, total, ok, targets.size)
+                    ),
                     StatusSlot.EPG,
                     minIntervalMs = 1_000
                 )
@@ -398,7 +403,10 @@ class TvhRepository(
                     if (!channelsReadyDef.isCompleted) channelsReadyDef.complete(Unit)
                     channelMap.size
                 }
-                setStatus("Channels ready: $count", StatusSlot.SYNC)
+                setStatus(
+                    UiText.Res(R.string.status_channels_ready, listOf(count)),
+                    StatusSlot.SYNC
+                )
             }
 
             // Async EPG updates (only when server data changes)
@@ -424,7 +432,7 @@ class TvhRepository(
 
                 publishChannelsLocked()
                 setStatusThrottled(
-                    "Syncing channels… ${channelMap.size}",
+                    UiText.Res(R.string.status_syncing_channels, listOf(channelMap.size)),
                     StatusSlot.SYNC,
                     minIntervalMs = 700
                 )
@@ -446,7 +454,7 @@ class TvhRepository(
                 channelMap[id] = existing.copy(name = newName, number = newNumber, icon = icon)
                 publishChannelsLocked()
                 setStatusThrottled(
-                    "Syncing channels… ${channelMap.size}",
+                    UiText.Res(R.string.status_syncing_channels, listOf(channelMap.size)),
                     StatusSlot.SYNC,
                     minIntervalMs = 700
                 )
