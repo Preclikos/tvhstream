@@ -9,7 +9,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -29,9 +31,19 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.min
 import kotlin.text.Charsets.UTF_8
 
+sealed class ConnectionState {
+    data object Disconnected : ConnectionState()
+    data class Connecting(val host: String, val port: Int) : ConnectionState()
+    data class Connected(val host: String, val port: Int, val htspVersion: Int?) : ConnectionState()
+    data class Error(val throwable: Throwable) : ConnectionState()
+}
+
 class HtspService(
     ioDispatcher: CoroutineDispatcher
 ) {
+    private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
+    val state: StateFlow<ConnectionState> = _state
+
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
     private val _controlEvents = MutableSharedFlow<HtspEvent>(
@@ -90,7 +102,7 @@ class HtspService(
         connectTimeoutMs: Int = 10_000,
         responseTimeoutMs: Long = 5_000,
 
-        soTimeoutMs: Int = 1_000,
+        soTimeoutMs: Int = 2_000,
 
         socketBufferBytes: Int = 64 * 1024,
 
@@ -98,6 +110,8 @@ class HtspService(
     ) {
         connectMutex.withLock {
             if (!forceReconnect && isConnectedUnsafe()) return
+
+            _state.value = ConnectionState.Connecting(host, port)
 
             disconnectInternal(CancellationException("Reconnect"))
 
@@ -116,6 +130,10 @@ class HtspService(
                 output = out
                 lastReadAtMs = System.currentTimeMillis()
 
+                if(readerJob != null)
+                {
+                    throw IllegalStateException("Reader job already running")
+                }
                 readerJob = scope.launch {
                     readerLoop(
                         responseTimeoutMs = responseTimeoutMs
@@ -154,7 +172,11 @@ class HtspService(
                         throw IllegalStateException("HTSP authentication failed (noaccess=1)")
                     }
                 }
+
+                _state.value = ConnectionState.Connected(host, port, negotiatedHtspVersion)
+
             } catch (t: Throwable) {
+                _state.value = ConnectionState.Error(t)
                 disconnectInternal(t)
                 throw t
             }
@@ -230,11 +252,9 @@ class HtspService(
         }
     }
 
-    fun disconnect() {
-        scope.launch {
-            connectMutex.withLock {
-                disconnectInternal(CancellationException("Disconnected"))
-            }
+    suspend fun disconnect() {
+        connectMutex.withLock {
+            disconnectInternal(CancellationException("Disconnected"))
         }
     }
 
@@ -312,60 +332,57 @@ class HtspService(
         initialSyncDef?.completeExceptionally(t)
         initialSyncDef = null
 
-        readerJob?.cancel()
+        val job = readerJob
         readerJob = null
+        job?.cancel()
+        val self = currentCoroutineContext()[Job]
+        if (job != null && job !== self) { job.join() }
 
-        try {
-            socket?.close()
-        } catch (_: Throwable) {
-        }
-        try {
-            input?.close()
-        } catch (_: Throwable) {
-        }
-        try {
-            output?.close()
-        } catch (_: Throwable) {
-        }
+        try { socket?.close() } catch (_: Throwable) {}
+        try { input?.close() } catch (_: Throwable) {}
+        try { output?.close() } catch (_: Throwable) {}
 
         input = null
         output = null
         socket = null
         challenge = null
         negotiatedHtspVersion = null
+
+        _state.value = ConnectionState.Disconnected
     }
 
-    private fun failAll(t: Throwable) {
-        _controlEvents.tryEmit(HtspEvent.ConnectionError(t))
+    private suspend fun failAll(t: Throwable) {
+        connectMutex.withLock {
+            _state.value = ConnectionState.Error(t)
+            _controlEvents.tryEmit(HtspEvent.ConnectionError(t))
 
-        val defs = pending.values.toList()
-        pending.clear()
-        defs.forEach { it.def.completeExceptionally(t) }
+            val defs = pending.values.toList()
+            pending.clear()
+            defs.forEach { it.def.completeExceptionally(t) }
 
-        initialSyncDef?.completeExceptionally(t)
-        initialSyncDef = null
+            initialSyncDef?.completeExceptionally(t)
+            initialSyncDef = null
 
-        // hard close
-        try {
-            socket?.close()
-        } catch (_: Throwable) {
+            val job = readerJob
+            readerJob = null
+            job?.cancel()
+
+            val self = currentCoroutineContext()[Job]
+            if (job != null && job !== self) {
+                try { job.join() } catch (_: Throwable) {}
+            }
+
+            try { socket?.close() } catch (_: Throwable) {}
+            try { input?.close() } catch (_: Throwable) {}
+            try { output?.close() } catch (_: Throwable) {}
+
+            input = null
+            output = null
+            socket = null
+            challenge = null
+            negotiatedHtspVersion = null
+
+            _state.value = ConnectionState.Disconnected
         }
-        try {
-            input?.close()
-        } catch (_: Throwable) {
-        }
-        try {
-            output?.close()
-        } catch (_: Throwable) {
-        }
-
-        input = null
-        output = null
-        socket = null
-        challenge = null
-        negotiatedHtspVersion = null
-
-        readerJob?.cancel()
-        readerJob = null
     }
 }

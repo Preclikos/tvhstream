@@ -1,8 +1,10 @@
 package cz.preclikos.tvhstream.htsp
 
+import timber.log.Timber
 import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 import kotlin.math.min
 
@@ -22,9 +24,21 @@ object HtspCodec {
     private const val MAX_NESTING_DEPTH = 32
 
     fun readMessage(input: InputStream): HtspMessage {
-        val declaredLen = readU32BE(input)
+        // ---- Root 4B length ----
+        val hdr = ByteArray(4)
+        readFullySoft(input, hdr, len = 4, what = "rootLen")
+
+        val declaredLen =
+            (((hdr[0].toLong() and 0xFF) shl 24) or
+                    ((hdr[1].toLong() and 0xFF) shl 16) or
+                    ((hdr[2].toLong() and 0xFF) shl 8)  or
+                    ( hdr[3].toLong() and 0xFF)) and 0xFFFF_FFFFL
+
+        // ---- THE ONLY FATAL CONDITION (can't safely "just read to end") ----
         if (declaredLen <= 0L || declaredLen > MAX_MESSAGE_SIZE.toLong()) {
-            throw IllegalStateException("Invalid HTSP message length: $declaredLen")
+            val hex = hdr.joinToString(" ") { "%02x".format(it) }
+            Timber.e("HTSP invalid root length=%d hdr=%s (fatal -> reconnect)", declaredLen, hex)
+            throw IllegalStateException("Invalid HTSP message length: $declaredLen hdr=$hex")
         }
 
         val len = declaredLen.toInt()
@@ -33,8 +47,8 @@ object HtspCodec {
         val fields = LinkedHashMap<String, Any?>()
         decodeMap(reader, fields, depth = 0)
 
-        // Drain any remaining bytes to keep stream aligned even if decoding didn't consume all
-        reader.drain()
+        // Always drain any leftover bytes so next message stays aligned
+        reader.drainSoft(what = "messageTailDrain")
 
         val method = fields["method"] as? String
         val seq = (fields["seq"] as? Number)?.toInt()
@@ -64,7 +78,7 @@ object HtspCodec {
         msg.rawPayload ?: (msg.fields["payload"] as? ByteArray)
 
     // ----------------------------
-    // STREAM DECODING
+    // DECODING
     // ----------------------------
 
     private fun decodeMap(r: BoundedReader, out: MutableMap<String, Any?>, depth: Int) {
@@ -84,41 +98,36 @@ object HtspCodec {
     }
 
     private fun decodeField(r: BoundedReader, depth: Int): Pair<String?, Any?> {
-        val type = r.readU8()
-        val nameLen = r.readU8()
+        val type = r.readU8Soft()
+        val nameLen = r.readU8Soft()
         if (nameLen > MAX_FIELD_NAME) throw IllegalStateException("Field name too long: $nameLen")
 
-        val dataLenU = r.readU32BE()
+        val dataLenU = r.readU32BESoft()
         if (dataLenU > r.remaining.toLong()) throw IllegalStateException("Truncated HTSP field data")
         val dataLen = dataLenU.toInt()
 
         val name = if (nameLen > 0) {
-            val nb = r.readExactly(nameLen)
+            val nb = r.readExactlySoft(nameLen, what = "fieldName")
             String(nb, StandardCharsets.UTF_8)
         } else null
 
         val data = r.slice(dataLen)
 
         val value: Any? = when (type) {
-            TYPE_MAP -> LinkedHashMap<String, Any?>().also {
-                decodeMap(
-                    data,
-                    it,
-                    depth + 1
-                ); data.drain()
-            }
-
-            TYPE_LIST -> ArrayList<Any?>().also { decodeList(data, it, depth + 1); data.drain() }
+            TYPE_MAP -> LinkedHashMap<String, Any?>().also { decodeMap(data, it, depth + 1) }
+            TYPE_LIST -> ArrayList<Any?>().also { decodeList(data, it, depth + 1) }
             TYPE_S64 -> readS64VarLenLE(data)
-            TYPE_STR -> String(data.readExactly(dataLen), StandardCharsets.UTF_8)
-            TYPE_BIN -> data.readExactly(dataLen)
+            TYPE_STR -> String(data.readExactlySoft(dataLen, what = "str"), StandardCharsets.UTF_8)
+            TYPE_BIN -> data.readExactlySoft(dataLen, what = "bin")
             TYPE_DBL -> readDoubleLE(data, dataLen)
             TYPE_BOOL -> readBool(data, dataLen)
-            TYPE_UUID -> data.readExactly(dataLen)
-            else -> data.readExactly(dataLen) // unknown -> raw bytes
+            TYPE_UUID -> data.readExactlySoft(dataLen, what = "uuid")
+            else -> data.readExactlySoft(dataLen, what = "unknown")
         }
 
-        data.drain()
+        // ensure slice fully consumed (keeps parent aligned)
+        data.drainSoft(what = "fieldDrain")
+
         return name to value
     }
 
@@ -128,47 +137,35 @@ object HtspCodec {
         val n = min(len, 8)
         var v = 0L
         for (i in 0 until n) {
-            v = v or ((r.readU8().toLong() and 0xFFL) shl (8 * i))
+            v = v or ((r.readU8Soft().toLong() and 0xFFL) shl (8 * i))
         }
-        // If server ever sends negative in <8 bytes, you can sign-extend here.
-        r.drain()
+        // consume any leftover bytes in this slice (if any)
+        r.drainSoft(what = "s64TailDrain")
         return v
     }
 
     private fun readDoubleLE(r: BoundedReader, len: Int): Double {
         if (len != 8) {
-            r.drain()
+            r.drainSoft(what = "dblLenMismatchDrain")
             return 0.0
         }
         var bits = 0L
         for (i in 0 until 8) {
-            bits = bits or ((r.readU8().toLong() and 0xFFL) shl (8 * i))
+            bits = bits or ((r.readU8Soft().toLong() and 0xFFL) shl (8 * i))
         }
         return java.lang.Double.longBitsToDouble(bits)
     }
 
     private fun readBool(r: BoundedReader, len: Int): Boolean {
-        if (len <= 0) {
-            r.drain()
-            return false
-        }
-        val v = r.readU8() != 0
-        r.drain()
+        if (len <= 0) return false
+        val v = r.readU8Soft() != 0
+        r.drainSoft(what = "boolTailDrain")
         return v
     }
 
     // ----------------------------
-    // Root length prefix IO
+    // Root prefix write
     // ----------------------------
-
-    private fun readU32BE(input: InputStream): Long {
-        val b = ByteArray(4)
-        readFully(input, b)
-        return (((b[0].toLong() and 0xFF) shl 24) or
-                ((b[1].toLong() and 0xFF) shl 16) or
-                ((b[2].toLong() and 0xFF) shl 8) or
-                (b[3].toLong() and 0xFF)) and 0xFFFF_FFFFL
-    }
 
     private fun writeU32BE(output: OutputStream, v: Int) {
         output.write((v ushr 24) and 0xFF)
@@ -177,17 +174,36 @@ object HtspCodec {
         output.write(v and 0xFF)
     }
 
-    private fun readFully(input: InputStream, buf: ByteArray, off: Int = 0, len: Int = buf.size) {
+    // ----------------------------
+    // SOFT read helpers (never throw on SO_TIMEOUT; only log + continue)
+    // ----------------------------
+
+    private fun readFullySoft(
+        input: InputStream,
+        buf: ByteArray,
+        off: Int = 0,
+        len: Int = buf.size,
+        what: String
+    ) {
         var readTotal = 0
+        var timeouts = 0
         while (readTotal < len) {
-            val r = input.read(buf, off + readTotal, len - readTotal)
-            if (r == -1) throw java.io.EOFException("EOF while reading $len bytes")
-            readTotal += r
+            try {
+                val r = input.read(buf, off + readTotal, len - readTotal)
+                if (r < 0) throw EOFException("EOF while reading $what ($len bytes, readTotal=$readTotal)")
+                readTotal += r
+            } catch (e: SocketTimeoutException) {
+                timeouts++
+                if (timeouts == 1 || timeouts % 50 == 0) {
+                    Timber.w(e, "SO_TIMEOUT during $what read len=$len after readTotal=$readTotal (continuing)")
+                }
+                // keep looping until we read all bytes or EOF
+            }
         }
     }
 
     // ----------------------------
-    // BoundedReader (correct slice that decrements parent too)
+    // BoundedReader (soft timeouts, always consume exact bytes)
     // ----------------------------
 
     private class BoundedReader(
@@ -198,53 +214,77 @@ object HtspCodec {
         var remaining: Int = initialLimit
             private set
 
-        fun readU8(): Int {
+        fun readU8Soft(): Int {
             if (remaining <= 0) throw EOFException("EOF in bounded reader")
-            val r = input.read()
-            if (r < 0) throw EOFException("EOF in bounded reader")
-            remaining -= 1
-            parent?.consumeFromChild(1)
-            return r and 0xFF
+            var timeouts = 0
+            while (true) {
+                try {
+                    val r = input.read()
+                    if (r < 0) throw EOFException("EOF in bounded reader")
+                    remaining -= 1
+                    parent?.consumeFromChild(1)
+                    return r and 0xFF
+                } catch (e: SocketTimeoutException) {
+                    timeouts++
+                    if (timeouts == 1 || timeouts % 200 == 0) {
+                        Timber.w(e, "SO_TIMEOUT during readU8 remaining=$remaining (continuing)")
+                    }
+                }
+            }
         }
 
-        fun readU32BE(): Int {
-            val b0 = readU8()
-            val b1 = readU8()
-            val b2 = readU8()
-            val b3 = readU8()
-            return (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
+        fun readU32BESoft(): Long {
+            val b0 = readU8Soft().toLong()
+            val b1 = readU8Soft().toLong()
+            val b2 = readU8Soft().toLong()
+            val b3 = readU8Soft().toLong()
+            return (((b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3) and 0xFFFF_FFFFL)
         }
 
-        fun readExactly(n: Int): ByteArray {
-            if (n < 0 || n > remaining) throw EOFException("Need $n bytes, remaining=$remaining")
+        fun readExactlySoft(n: Int, what: String): ByteArray {
+            if (n < 0 || n > remaining) throw EOFException("Need $n bytes, remaining=$remaining ($what)")
             val buf = ByteArray(n)
+
             var off = 0
+            var timeouts = 0
             while (off < n) {
-                val toRead = n - off
-                val r = input.read(buf, off, toRead)
-                if (r < 0) throw EOFException("EOF while reading $n bytes")
-                off += r
-                remaining -= r
-                parent?.consumeFromChild(r)
+                try {
+                    val r = input.read(buf, off, n - off)
+                    if (r < 0) throw EOFException("EOF while reading $what ($n bytes, off=$off)")
+                    off += r
+                    remaining -= r
+                    parent?.consumeFromChild(r)
+                } catch (e: SocketTimeoutException) {
+                    timeouts++
+                    if (timeouts == 1 || timeouts % 50 == 0) {
+                        Timber.w(e, "SO_TIMEOUT during readExactly($what) n=$n off=$off remaining=$remaining (continuing)")
+                    }
+                }
             }
             return buf
         }
 
         fun slice(n: Int): BoundedReader {
             if (n < 0 || n > remaining) throw EOFException("Slice $n bytes, remaining=$remaining")
-            // Child reads from SAME InputStream, but parent must be decremented as child consumes.
             return BoundedReader(input, n, parent = this)
         }
 
-        fun drain() {
+        fun drainSoft(what: String) {
+            if (remaining <= 0) return
+            val tmp = ByteArray(8192)
+            var timeouts = 0
             while (remaining > 0) {
-                val skipped = input.skip(remaining.toLong()).toInt()
-                if (skipped > 0) {
-                    remaining -= skipped
-                    parent?.consumeFromChild(skipped)
-                } else {
-                    // skip can return 0: fallback to read
-                    readU8()
+                val toRead = min(remaining, tmp.size)
+                try {
+                    val r = input.read(tmp, 0, toRead)
+                    if (r < 0) throw EOFException("EOF while draining $what (remaining=$remaining)")
+                    remaining -= r
+                    parent?.consumeFromChild(r)
+                } catch (e: SocketTimeoutException) {
+                    timeouts++
+                    if (timeouts == 1 || timeouts % 50 == 0) {
+                        Timber.w(e, "SO_TIMEOUT during drain($what) remaining=$remaining (continuing)")
+                    }
                 }
             }
         }
@@ -257,7 +297,7 @@ object HtspCodec {
     }
 
     // ----------------------------
-    // Encoding (same as before)
+    // Encoding (unchanged)
     // ----------------------------
 
     private fun encodeMapBody(map: Map<String, Any?>): ByteArray {
@@ -312,7 +352,6 @@ object HtspCodec {
                 }
                 TYPE_MAP to encodeMapBody(m)
             }
-
             is List<*> -> TYPE_LIST to encodeListBody(value)
             else -> error("Unsupported HTSP field type: ${value::class.java.name}")
         }

@@ -13,7 +13,6 @@ import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -47,6 +46,6 @@ val appModule = module {
             statusService = get()
         )
     }
-    viewModel { VideoPlayerViewModel(playerSession = get(), repo = get()) }
+    viewModel { VideoPlayerViewModel(playerSession = get(), repo = get(), htspService = get()) }
     viewModel { ChannelsViewModel(repo = get()) }
 }
