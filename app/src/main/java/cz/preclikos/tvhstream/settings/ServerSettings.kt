@@ -23,7 +23,7 @@ class SettingsStore(private val context: Context) {
     private object Keys {
         val HOST = stringPreferencesKey("host")
         val PORT_HTSP = intPreferencesKey("htspPort")
-        val PORT_HTTP = intPreferencesKey("htspPort")
+        val PORT_HTTP = intPreferencesKey("httpPort")
         val USER = stringPreferencesKey("user")
         val AUTO = booleanPreferencesKey("auto")
     }
