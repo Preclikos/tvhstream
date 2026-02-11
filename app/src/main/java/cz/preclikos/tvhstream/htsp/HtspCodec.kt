@@ -23,11 +23,12 @@ object HtspCodec {
 
     fun readMessage(input: InputStream): HtspMessage {
         val declaredLen = readU32BE(input)
-        if (declaredLen <= 0 || declaredLen > MAX_MESSAGE_SIZE) {
+        if (declaredLen <= 0L || declaredLen > MAX_MESSAGE_SIZE.toLong()) {
             throw IllegalStateException("Invalid HTSP message length: $declaredLen")
         }
 
-        val reader = BoundedReader(input, declaredLen)
+        val len = declaredLen.toInt()
+        val reader = BoundedReader(input, len)
 
         val fields = LinkedHashMap<String, Any?>()
         decodeMap(reader, fields, depth = 0)
@@ -87,8 +88,9 @@ object HtspCodec {
         val nameLen = r.readU8()
         if (nameLen > MAX_FIELD_NAME) throw IllegalStateException("Field name too long: $nameLen")
 
-        val dataLen = r.readU32BE()
-        if (dataLen < 0 || dataLen > r.remaining) throw IllegalStateException("Truncated HTSP field data")
+        val dataLenU = r.readU32BE()
+        if (dataLenU > r.remaining.toLong()) throw IllegalStateException("Truncated HTSP field data")
+        val dataLen = dataLenU.toInt()
 
         val name = if (nameLen > 0) {
             val nb = r.readExactly(nameLen)
@@ -159,13 +161,13 @@ object HtspCodec {
     // Root length prefix IO
     // ----------------------------
 
-    private fun readU32BE(input: InputStream): Int {
+    private fun readU32BE(input: InputStream): Long {
         val b = ByteArray(4)
         readFully(input, b)
-        return ((b[0].toInt() and 0xFF) shl 24) or
-                ((b[1].toInt() and 0xFF) shl 16) or
-                ((b[2].toInt() and 0xFF) shl 8) or
-                (b[3].toInt() and 0xFF)
+        return (((b[0].toLong() and 0xFF) shl 24) or
+                ((b[1].toLong() and 0xFF) shl 16) or
+                ((b[2].toLong() and 0xFF) shl 8) or
+                (b[3].toLong() and 0xFF)) and 0xFFFF_FFFFL
     }
 
     private fun writeU32BE(output: OutputStream, v: Int) {
