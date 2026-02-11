@@ -102,7 +102,7 @@ class HtspService(
         connectTimeoutMs: Int = 10_000,
         responseTimeoutMs: Long = 5_000,
 
-        soTimeoutMs: Int = 2_000,
+        soTimeoutMs: Int = 60_000,
 
         socketBufferBytes: Int = 64 * 1024,
 
