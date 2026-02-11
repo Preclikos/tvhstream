@@ -9,7 +9,7 @@ import cz.preclikos.tvhstream.repositories.TvhRepository
 class VideoPlayerViewModel(
     private val playerSession: PlayerSession,
     private val repo: TvhRepository,
-    private val htspService: HtspService
+    htspService: HtspService
 ) : ViewModel() {
     val connectionState = htspService.state
 

@@ -39,6 +39,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import cz.preclikos.tvhstream.htsp.ConnectionState
 import cz.preclikos.tvhstream.stores.ChannelSelectionStore
 import cz.preclikos.tvhstream.ui.common.nextAfter
 import cz.preclikos.tvhstream.ui.common.nowEvent
@@ -74,10 +75,12 @@ fun VideoPlayerScreen(
     serviceId: Int,
     onClose: () -> Unit
 ) {
+    val connState by videoPlayerViewModel.connectionState.collectAsState()
     val channels by channelsVm.channels.collectAsState()
     val selectedInitId by selection.selectedId.collectAsState()
     var selectedId by remember { mutableIntStateOf(selectedInitId) }
 
+    var connectionLost by remember { mutableStateOf(false) }
     var screenActive by remember { mutableStateOf(false) }
     var drawerOpen by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
@@ -92,6 +95,7 @@ fun VideoPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val ctx = LocalContext.current
     val player = remember { videoPlayerViewModel.getPlayerInstance(ctx) }
+
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -162,6 +166,33 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(showDrawer) {
         if (showDrawer) drawerFocus.requestFocus()
+    }
+
+    LaunchedEffect(connState, screenActive) {
+        if (!screenActive) return@LaunchedEffect
+
+        when (connState) {
+            is ConnectionState.Connected -> {
+                if (connectionLost) {
+                    connectionLost = false
+                    showControls()
+
+                    videoPlayerViewModel.playService(ctx, currentServiceId)
+                    lastPlayedServiceId = currentServiceId
+                }
+            }
+
+            is ConnectionState.Connecting,
+            is ConnectionState.Disconnected,
+            is ConnectionState.Error -> {
+                if (!connectionLost) {
+                    connectionLost = true
+                    showControls()
+                    videoPlayerViewModel.stop()
+                    lastPlayedServiceId = -1
+                }
+            }
+        }
     }
 
     Box(
