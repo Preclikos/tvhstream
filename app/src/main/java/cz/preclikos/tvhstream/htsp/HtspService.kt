@@ -252,6 +252,39 @@ class HtspService(
         }
     }
 
+    suspend fun fileOpen(path: String, timeoutMs: Long = 5_000): Int {
+        val p = if (path.startsWith("/")) path else "/$path"
+        val msg = request(
+            method = "fileOpen",
+            fields = mapOf("file" to p),
+            timeoutMs = timeoutMs,
+            flush = true,
+            disconnectOnTimeout = false
+        )
+        return msg.int("id") ?: error("fileOpen: missing id")
+    }
+
+    suspend fun fileRead(id: Int, size: Int, timeoutMs: Long = 5_000): ByteArray {
+        val msg = request(
+            method = "fileRead",
+            fields = mapOf("id" to id, "size" to size),
+            timeoutMs = timeoutMs,
+            flush = true,
+            disconnectOnTimeout = false
+        )
+        return msg.bin("data") ?: ByteArray(0) // EOF => empty
+    }
+
+    suspend fun fileClose(id: Int, timeoutMs: Long = 5_000) {
+        request(
+            method = "fileClose",
+            fields = mapOf("id" to id),
+            timeoutMs = timeoutMs,
+            flush = true,
+            disconnectOnTimeout = false
+        )
+    }
+
     suspend fun disconnect() {
         connectMutex.withLock {
             disconnectInternal(CancellationException("Disconnected"))

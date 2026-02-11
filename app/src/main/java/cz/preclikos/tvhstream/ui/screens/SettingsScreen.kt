@@ -54,7 +54,6 @@ fun SettingsScreen(
 
     var host by rememberSaveable { mutableStateOf("") }
     var htspPort by rememberSaveable { mutableStateOf("9982") }
-    var httpPort by rememberSaveable { mutableStateOf("9981") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
     var auto by rememberSaveable { mutableStateOf(true) }
@@ -67,7 +66,6 @@ fun SettingsScreen(
         val s = settingsStore.serverSettings.first()
         host = s.host
         htspPort = s.htspPort.toString()
-        httpPort = s.httpPort.toString()
         user = s.username
         pass = passwordStore.getPassword()
 
@@ -103,13 +101,6 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
 
             OutlinedTextField(
-                value = httpPort,
-                onValueChange = { httpPort = it },
-                label = { Text(stringResource(R.string.port_http)) }
-            )
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
                 value = user,
                 onValueChange = { user = it },
                 label = { Text(stringResource(R.string.username)) }
@@ -125,9 +116,8 @@ fun SettingsScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 val pHtsp = htspPort.toIntOrNull() ?: 9982
-                val pHttp = httpPort.toIntOrNull() ?: 9981
                 scope.launch {
-                    settingsStore.saveServer(host, pHtsp, pHttp, user, auto)
+                    settingsStore.saveServer(host, pHtsp, user, auto)
                     passwordStore.setPassword(pass)
                     onDone()
                 }

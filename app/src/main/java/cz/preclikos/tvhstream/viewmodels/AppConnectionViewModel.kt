@@ -3,7 +3,9 @@ package cz.preclikos.tvhstream.viewmodels
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coil3.ImageLoader
 import cz.preclikos.tvhstream.R
+import cz.preclikos.tvhstream.htsp.ConnectionState
 import cz.preclikos.tvhstream.htsp.HtspEvent
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
@@ -16,6 +18,7 @@ import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -25,7 +28,7 @@ class AppConnectionViewModel(
     private val repo: TvhRepository,
     private val statusService: StatusService,
     private val settings: SettingsStore,
-    private val passwords: SecurePasswordStore
+    private val passwords: SecurePasswordStore,
 ) : ViewModel() {
 
     val status = statusService.headline
@@ -166,7 +169,7 @@ class AppConnectionViewModel(
                 if (ok) return@launch
 
                 statusService.set(StatusSlot.CONNECTION, UiText.Plain("Reconnect in 5s…"))
-                kotlinx.coroutines.delay(5_000)
+                delay(5_000)
             }
         }
     }

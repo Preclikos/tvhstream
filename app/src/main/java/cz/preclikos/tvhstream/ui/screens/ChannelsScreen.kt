@@ -27,7 +27,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -38,17 +37,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import coil3.request.crossfade
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
-import cz.preclikos.tvhstream.settings.SecurePasswordStore
-import cz.preclikos.tvhstream.settings.SettingsStore
 import cz.preclikos.tvhstream.stores.ChannelSelectionStore
 import cz.preclikos.tvhstream.ui.common.formatHm
 import cz.preclikos.tvhstream.ui.common.progress
@@ -58,8 +52,6 @@ import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import okhttp3.Credentials
-import okhttp3.OkHttpClient
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
@@ -67,15 +59,13 @@ import org.koin.compose.koinInject
 fun ChannelsScreen(
     channelViewModel: ChannelsViewModel = koinViewModel(),
     selection: ChannelSelectionStore = koinInject(),
+    imageLoader: ImageLoader = koinInject(),
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit
 ) {
     val channels by channelViewModel.channels.collectAsState()
     val selectedId by selection.selectedId.collectAsState()
     var didInitialRestore by remember { mutableStateOf(false) }
     var isRestoring by remember { mutableStateOf(false) }
-
-    val imageLoader = rememberTvhImageLoader()
-    val baseUrl = rememberTvhBaseUrl()
 
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
 
@@ -202,66 +192,10 @@ fun ChannelsScreen(
                     nowSec = nowSec,
                     next = focusedNext,
                     imageLoader = imageLoader,
-                    baseUrl = baseUrl,
                     piconPath = focusedChannel?.icon
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun rememberTvhBaseUrl(settingsStore: SettingsStore = koinInject()): String {
-    val s by settingsStore.serverSettings.collectAsState(initial = null)
-
-    val host = s?.host.orEmpty()
-    val port = s?.httpPort ?: 9981
-
-    return remember(host, port) {
-        if (host.isBlank()) "" else "http://$host:$port"
-    }
-}
-
-@Composable
-fun rememberTvhImageLoader(
-    settingsStore: SettingsStore = koinInject(),
-    passwordStore: SecurePasswordStore = koinInject()
-): ImageLoader {
-
-    val ctx = LocalContext.current
-    val settings by settingsStore.serverSettings.collectAsState(initial = null)
-
-    val user = settings?.username.orEmpty()
-
-    val pass by produceState<String?>(initialValue = null, key1 = user) {
-        value = if (user.isBlank()) null else passwordStore.getPassword()
-    }
-
-    return remember(user, pass) {
-
-        val okHttp = OkHttpClient.Builder()
-            .addInterceptor { chain ->
-                val req = chain.request()
-
-                if (user.isNotBlank() && !pass.isNullOrBlank()) {
-                    val auth = Credentials.basic(user, pass!!)
-                    chain.proceed(
-                        req.newBuilder()
-                            .header("Authorization", auth)
-                            .build()
-                    )
-                } else {
-                    chain.proceed(req)
-                }
-            }
-            .build()
-
-        ImageLoader.Builder(ctx)
-            .components {
-                add(OkHttpNetworkFetcherFactory(okHttp))
-            }
-            .crossfade(true)
-            .build()
     }
 }
 
@@ -272,7 +206,6 @@ private fun EpgDetailPane(
     next: EpgEventEntry?,
     nowSec: Long,
     imageLoader: ImageLoader,
-    baseUrl: String,
     piconPath: String? = null,
 ) {
     val progress = remember(now, nowSec) { now?.progress(nowSec) ?: 0f }
@@ -304,7 +237,7 @@ private fun EpgDetailPane(
                     .height(64.dp),
                 contentAlignment = Alignment.Center
             ) {
-                PiconBox(imageLoader = imageLoader, baseUrl = baseUrl, piconPath = piconPath)
+                PiconBox(imageLoader = imageLoader, piconPath = piconPath)
             }
         }
 
