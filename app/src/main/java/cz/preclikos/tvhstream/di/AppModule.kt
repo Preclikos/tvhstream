@@ -2,6 +2,7 @@ package cz.preclikos.tvhstream.di
 
 import coil3.ImageLoader
 import cz.preclikos.tvhstream.htsp.HtspService
+import cz.preclikos.tvhstream.htsp.buildImageLoader
 import cz.preclikos.tvhstream.player.PlayerSession
 import cz.preclikos.tvhstream.repositories.TvhRepository
 import cz.preclikos.tvhstream.services.StatusService
@@ -9,7 +10,6 @@ import cz.preclikos.tvhstream.services.StatusServiceImpl
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.SettingsStore
 import cz.preclikos.tvhstream.stores.ChannelSelectionStore
-import cz.preclikos.tvhstream.ui.components.buildImageLoader
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
 import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel

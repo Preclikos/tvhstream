@@ -3,9 +3,7 @@ package cz.preclikos.tvhstream.viewmodels
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import coil3.ImageLoader
 import cz.preclikos.tvhstream.R
-import cz.preclikos.tvhstream.htsp.ConnectionState
 import cz.preclikos.tvhstream.htsp.HtspEvent
 import cz.preclikos.tvhstream.htsp.HtspMessage
 import cz.preclikos.tvhstream.htsp.HtspService
@@ -36,7 +34,6 @@ class AppConnectionViewModel(
     private data class ServerCfg(
         val host: String,
         val htspPort: Int,
-        val httpPort: Int,
         val username: String,
         val password: String
     )
@@ -58,7 +55,6 @@ class AppConnectionViewModel(
                 lastCfg = ServerCfg(
                     host = s.host,
                     htspPort = s.htspPort,
-                    httpPort = s.httpPort,
                     username = s.username,
                     password = passwords.getPassword()
                 )
@@ -179,11 +175,10 @@ class AppConnectionViewModel(
     fun connectOnceFromUi(
         host: String,
         htspPort: Int,
-        httpPort: Int,
         username: String,
         password: String
     ) {
-        lastCfg = ServerCfg(host, htspPort, httpPort, username, password)
+        lastCfg = ServerCfg(host, htspPort, username, password)
         startOrRestartReconnectLoop()
     }
 
