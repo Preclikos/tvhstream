@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -89,86 +91,89 @@ fun AppRoot() {
             else -> nav.popBackStack()
         }
     }
-
-    Row(Modifier.fillMaxSize()) {
-        if (showRail) {
-            SideRail(
-                currentRoute = topRoute,
-                onNavigate = { route ->
-                    val current = nav.currentBackStackEntry?.destination?.route
-                    if (current == route) {
-                        if (!isPlayer) contentFocus.requestFocus()
-                    } else {
-                        nav.navigate(route) {
-                            popUpTo(Routes.CHANNELS) { inclusive = false }
-                            launchSingleTop = true
-                            restoreState = true
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Row(Modifier.fillMaxSize()) {
+            if (showRail) {
+                SideRail(
+                    currentRoute = topRoute,
+                    onNavigate = { route ->
+                        val current = nav.currentBackStackEntry?.destination?.route
+                        if (current == route) {
+                            if (!isPlayer) contentFocus.requestFocus()
+                        } else {
+                            nav.navigate(route) {
+                                popUpTo(Routes.CHANNELS) { inclusive = false }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
-                }
-            )
-        }
-
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxHeight()
-        ) {
-            NavHost(
-                navController = nav,
-                startDestination = Routes.CHANNELS,
-            ) {
-
-                composable(Routes.CHANNELS) {
-                    ContentContainer(contentFocus) {
-                        ChannelsScreen(
-                            onPlay = { channelId, serviceId, name ->
-                                nav.navigate(Routes.player(channelId, serviceId, name))
-                            }
-                        )
-                    }
-                }
-
-                composable(Routes.EPG) {
-                    ContentContainer(contentFocus) {
-                        EpgGridScreen(
-                            onPlay = { channelId, serviceId, name ->
-                                nav.navigate(Routes.player(channelId, serviceId, name))
-                            }
-                        )
-                    }
-                }
-
-                composable(Routes.SETTINGS) {
-                    ContentContainer(contentFocus) {
-                        SettingsScreen(
-                            onDone = { nav.popBackStack() }
-                        )
-                    }
-                }
-
-                composable(
-                    route = "${Routes.PLAYER}/{channelId}/{serviceId}/{channelName}",
-                    arguments = listOf(
-                        navArgument("channelId") { type = NavType.IntType },
-                        navArgument("serviceId") { type = NavType.IntType },
-                        navArgument("channelName") { type = NavType.StringType },
-                    )
-                ) { backStackEntry ->
-                    val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
-                    val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
-                    val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
-
-                    VideoPlayerScreen(
-                        channelId = channelId,
-                        channelName = channelName,
-                        serviceId = serviceId,
-                        onClose = { nav.popBackStack() }
-                    )
-                }
+                )
             }
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                NavHost(
+                    navController = nav,
+                    startDestination = Routes.CHANNELS,
+                ) {
 
-            InfoBanner(message = status, modifier = Modifier.fillMaxSize())
+                    composable(Routes.CHANNELS) {
+                        ContentContainer(contentFocus) {
+                            ChannelsScreen(
+                                onPlay = { channelId, serviceId, name ->
+                                    nav.navigate(Routes.player(channelId, serviceId, name))
+                                }
+                            )
+                        }
+                    }
+
+                    composable(Routes.EPG) {
+                        ContentContainer(contentFocus) {
+                            EpgGridScreen(
+                                onPlay = { channelId, serviceId, name ->
+                                    nav.navigate(Routes.player(channelId, serviceId, name))
+                                }
+                            )
+                        }
+                    }
+
+                    composable(Routes.SETTINGS) {
+                        ContentContainer(contentFocus) {
+                            SettingsScreen(
+                                onDone = { nav.popBackStack() }
+                            )
+                        }
+                    }
+
+                    composable(
+                        route = "${Routes.PLAYER}/{channelId}/{serviceId}/{channelName}",
+                        arguments = listOf(
+                            navArgument("channelId") { type = NavType.IntType },
+                            navArgument("serviceId") { type = NavType.IntType },
+                            navArgument("channelName") { type = NavType.StringType },
+                        )
+                    ) { backStackEntry ->
+                        val channelId = backStackEntry.arguments?.getInt("channelId") ?: 0
+                        val serviceId = backStackEntry.arguments?.getInt("serviceId") ?: 0
+                        val channelName = backStackEntry.arguments?.getString("channelName") ?: ""
+
+                        VideoPlayerScreen(
+                            channelId = channelId,
+                            channelName = channelName,
+                            serviceId = serviceId,
+                            onClose = { nav.popBackStack() }
+                        )
+                    }
+                }
+
+                InfoBanner(message = status, modifier = Modifier.fillMaxSize())
+            }
         }
     }
 }

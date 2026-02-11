@@ -18,6 +18,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -49,18 +53,24 @@ class AppConnectionViewModel(
         repo.startIfNeeded()
 
         autoJob = viewModelScope.launch(Dispatchers.IO) {
-            settings.serverSettings.collectLatest { s ->
-                if (s.host.isBlank()) return@collectLatest
-
-                lastCfg = ServerCfg(
-                    host = s.host,
-                    htspPort = s.htspPort,
-                    username = s.username,
-                    password = passwords.getPassword()
-                )
-
-                startOrRestartReconnectLoop()
-            }
+            combine(
+                settings.serverSettings,
+                passwords.passwordFlow
+            ) { s, pwd -> s to pwd }
+                .filter { (s, pwd) -> s.host.isNotBlank() && s.htspPort != 0 && s.username.isNotBlank() && pwd.isNotBlank() }
+                .map { (s, pwd) ->
+                    ServerCfg(
+                        host = s.host,
+                        htspPort = s.htspPort,
+                        username = s.username,
+                        password = pwd
+                    )
+                }
+                .distinctUntilChanged()
+                .collectLatest { cfg ->
+                    lastCfg = cfg
+                    startOrRestartReconnectLoop()
+                }
         }
 
         viewModelScope.launch(Dispatchers.IO) {

@@ -7,7 +7,12 @@ import android.util.Base64
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -19,8 +24,16 @@ private val Context.secureDataStore by preferencesDataStore(name = "tvh_secure")
 class SecurePasswordStore(private val context: Context) {
 
     private val passwordKey = stringPreferencesKey("password_enc")
-
     private val keyAlias = "tvh_secure_aes_key"
+    
+    val passwordFlow: Flow<String> =
+        context.secureDataStore.data
+            .map { prefs ->
+                val enc = prefs[passwordKey] ?: return@map ""
+                runCatching { decrypt(enc) }.getOrDefault("")
+            }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
 
     suspend fun getPassword(): String {
         val enc = context.secureDataStore.data.first()[passwordKey] ?: return ""
