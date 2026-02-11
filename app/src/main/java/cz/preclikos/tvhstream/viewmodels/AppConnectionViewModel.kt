@@ -197,7 +197,15 @@ class AppConnectionViewModel(
 
             repo.onNewConnectionStarting()
 
-            htsp.connect(host, port, username, password)
+            htsp.connect(
+                host = host,
+                port = port,
+                username = username,
+                password = password,
+                forceReconnect = true,
+                connectTimeoutMs = 10_000,
+                responseTimeoutMs = 5_000
+            )
             statusService.set(StatusSlot.CONNECTION, UiText.Plain("Connected"))
 
             statusService.set(StatusSlot.SYNC, UiText.Plain("Syncing…"))
