@@ -1,0 +1,45 @@
+name: Build APK + GitHub Release (release branches only)
+
+on:
+  push:
+    branches:
+      - "master"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          targetSdk: '35'
+      
+      - name: Install BuildTools
+        run: sdkmanager --install "build-tools;35.0.0"
+
+      - name: Decode google-services.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > app/google-services.json
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # These env vars are commonly used by Gradle signingConfigs (you wire them in build.gradle.kts)
+      - name: Build Release APK
+        run: |
+          ./gradlew clean assembleRelease
