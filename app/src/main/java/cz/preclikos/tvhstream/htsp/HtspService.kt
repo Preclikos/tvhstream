@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.htsp
 
+import cz.preclikos.tvhstream.BuildConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -72,17 +73,22 @@ class HtspService(
 
     @Volatile
     private var socket: Socket? = null
+
     @Volatile
     private var input: InputStream? = null
+
     @Volatile
     private var output: OutputStream? = null
+
     @Volatile
     private var readerJob: Job? = null
 
     @Volatile
     private var challenge: ByteArray? = null
+
     @Volatile
     private var negotiatedHtspVersion: Int? = null
+
     @Volatile
     private var initialSyncDef: CompletableDeferred<Unit>? = null
 
@@ -95,8 +101,8 @@ class HtspService(
         port: Int,
         username: String? = null,
         password: String? = null,
-        clientName: String = "TVHStream",
-        clientVersion: String = "0.1",
+        clientName: String = "TVHStream / " + BuildConfig.VERSION_NAME,
+        clientVersion: String = BuildConfig.VERSION_NAME,
         htspVersion: Int = 43,
 
         connectTimeoutMs: Int = 10_000,
@@ -130,8 +136,7 @@ class HtspService(
                 output = out
                 lastReadAtMs = System.currentTimeMillis()
 
-                if(readerJob != null)
-                {
+                if (readerJob != null) {
                     throw IllegalStateException("Reader job already running")
                 }
                 readerJob = scope.launch {
@@ -369,11 +374,22 @@ class HtspService(
         readerJob = null
         job?.cancel()
         val self = currentCoroutineContext()[Job]
-        if (job != null && job !== self) { job.join() }
+        if (job != null && job !== self) {
+            job.join()
+        }
 
-        try { socket?.close() } catch (_: Throwable) {}
-        try { input?.close() } catch (_: Throwable) {}
-        try { output?.close() } catch (_: Throwable) {}
+        try {
+            socket?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            input?.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            output?.close()
+        } catch (_: Throwable) {
+        }
 
         input = null
         output = null
@@ -402,12 +418,24 @@ class HtspService(
 
             val self = currentCoroutineContext()[Job]
             if (job != null && job !== self) {
-                try { job.join() } catch (_: Throwable) {}
+                try {
+                    job.join()
+                } catch (_: Throwable) {
+                }
             }
 
-            try { socket?.close() } catch (_: Throwable) {}
-            try { input?.close() } catch (_: Throwable) {}
-            try { output?.close() } catch (_: Throwable) {}
+            try {
+                socket?.close()
+            } catch (_: Throwable) {
+            }
+            try {
+                input?.close()
+            } catch (_: Throwable) {
+            }
+            try {
+                output?.close()
+            } catch (_: Throwable) {
+            }
 
             input = null
             output = null
