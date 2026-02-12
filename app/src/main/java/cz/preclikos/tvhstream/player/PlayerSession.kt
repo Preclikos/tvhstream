@@ -13,14 +13,17 @@ import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.player.htsp.HtspSubscriptionDataSource
 import cz.preclikos.tvhstream.player.htsp.LegacyRenderer
 import cz.preclikos.tvhstream.player.htsp.TvheadendExtractorsFactory
+import cz.preclikos.tvhstream.settings.PlayerSettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class PlayerSession(
-    private val htsp: HtspService
+    private val htsp: HtspService,
+    private val playerSettingsStore: PlayerSettingsStore,
 ) {
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var player: ExoPlayer? = null
@@ -56,8 +59,9 @@ class PlayerSession(
 
         mainScope.launch {
             val p = getOrCreatePlayer(context)
+            val settings = playerSettingsStore.playerSettings.first()
 
-            dataSourceFactory = HtspSubscriptionDataSource.Factory(context, htsp, null)
+            dataSourceFactory = HtspSubscriptionDataSource.Factory(context, htsp, settings.profile)
             val mediaSource = ProgressiveMediaSource.Factory(
                 dataSourceFactory,
                 TvheadendExtractorsFactory()

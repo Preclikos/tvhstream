@@ -1,172 +1,91 @@
 package cz.preclikos.tvhstream.ui.screens
 
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
-import cz.preclikos.tvhstream.R
-import cz.preclikos.tvhstream.settings.SecurePasswordStore
-import cz.preclikos.tvhstream.settings.SettingsStore
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import cz.preclikos.tvhstream.ui.Routes
+import cz.preclikos.tvhstream.ui.components.SettingsSubRail
+import cz.preclikos.tvhstream.ui.screens.settings.SettingsConnection
+import cz.preclikos.tvhstream.ui.screens.settings.SettingsPlayer
 
-@Composable
-fun SettingsScreen(
-    settingsStore: SettingsStore = koinInject(),
-    passwordStore: SecurePasswordStore = koinInject(),
-    onDone: () -> Unit
-) {
-    val scope = rememberCoroutineScope()
-
-    val hostFocus = remember { FocusRequester() }
-
-    var host by rememberSaveable { mutableStateOf("") }
-    var htspPort by rememberSaveable { mutableStateOf("9982") }
-    var user by rememberSaveable { mutableStateOf("") }
-    var pass by rememberSaveable { mutableStateOf("") }
-    var auto by rememberSaveable { mutableStateOf(true) }
-
-    var didInit by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (didInit) return@LaunchedEffect
-        didInit = true
-
-        val s = settingsStore.serverSettings.first()
-        host = s.host
-        htspPort = s.htspPort.toString()
-        user = s.username
-        pass = passwordStore.getPassword()
-
-        hostFocus.requestFocus()
-    }
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(top = 10.dp)
-        )
-
-        Column(modifier = Modifier.focusGroup()) {
-            OutlinedTextField(
-                value = host,
-                onValueChange = { host = it },
-                label = { Text(stringResource(R.string.host)) }
-            )
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = htspPort,
-                onValueChange = { htspPort = it },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number
-                ),
-                label = { Text(stringResource(R.string.port_htsp)) }
-            )
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = user,
-                onValueChange = { user = it },
-                label = { Text(stringResource(R.string.username)) }
-            )
-            Spacer(Modifier.height(12.dp))
-
-            PasswordField(
-                value = pass,
-                onValueChange = { pass = it }
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                val pHtsp = htspPort.toIntOrNull() ?: 9982
-                scope.launch {
-                    settingsStore.saveServer(host, pHtsp, user, auto)
-                    passwordStore.setPassword(pass)
-                    onDone()
-                }
-            }, modifier = Modifier.focusRequester(hostFocus)) {
-                Text(stringResource(R.string.save))
-            }
-
-            OutlinedButton(onClick = onDone) {
-                Text(stringResource(R.string.back))
-            }
-        }
-    }
+object SettingsRoutes {
+    const val GENERAL = "settings/general"
+    const val PLAYER = "settings/player"
+    const val CONNECTION = "settings/connection"
+    const val ABOUT = "settings/about"
 }
 
 @Composable
-fun PasswordField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var passwordVisible by remember { mutableStateOf(false) }
+fun SettingsScreen() {
+    val nav = rememberNavController()
+    val context = LocalContext.current
+    val activity = context as? Activity
 
-    val icon = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility
-    val desc =
-        stringResource(if (passwordVisible) R.string.hide_password else R.string.show_password)
+    val backStackEntry by nav.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val topRoute = currentRoute?.substringBefore("/")
 
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        label = { Text(stringResource(R.string.password)) },
-
-        visualTransformation = if (passwordVisible) {
-            VisualTransformation.None
-        } else {
-            PasswordVisualTransformation()
-        },
-
-        trailingIcon = {
-            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                Icon(imageVector = icon, contentDescription = desc)
+    BackHandler {
+        when (currentRoute) {
+            Routes.CHANNELS, Routes.EPG -> {
+                activity?.finishAffinity()
+                kotlin.system.exitProcess(0)
             }
-        },
 
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        singleLine = true
-    )
+            Routes.SETTINGS -> {
+                nav.navigate(Routes.CHANNELS) { launchSingleTop = true }
+            }
+
+            else -> nav.popBackStack()
+        }
+    }
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Row(Modifier.fillMaxSize()) {
+            SettingsSubRail(
+                currentRoute = topRoute,
+                onNavigate = { route ->
+                    nav.navigate(route) {
+                        popUpTo(Routes.CHANNELS) { inclusive = false }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                NavHost(
+                    navController = nav,
+                    startDestination = SettingsRoutes.CONNECTION,
+                ) {
+                    composable(SettingsRoutes.CONNECTION) {
+                        SettingsConnection()
+                    }
+
+                    composable(SettingsRoutes.PLAYER) {
+                        SettingsPlayer()
+                    }
+                }
+            }
+        }
+    }
 }

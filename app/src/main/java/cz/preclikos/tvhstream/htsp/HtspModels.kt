@@ -108,3 +108,8 @@ data class SubscriptionStatus
     val state: String? = null,   // "Running" / "No input" / "Scrambled" / ...
     val subscriptionError: String? = null,
 )
+
+data class ProfileItem(
+    val id: String,
+    val name: String
+)

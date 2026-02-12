@@ -7,11 +7,13 @@ import cz.preclikos.tvhstream.player.PlayerSession
 import cz.preclikos.tvhstream.repositories.TvhRepository
 import cz.preclikos.tvhstream.services.StatusService
 import cz.preclikos.tvhstream.services.StatusServiceImpl
+import cz.preclikos.tvhstream.settings.PlayerSettingsStore
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
-import cz.preclikos.tvhstream.settings.SettingsStore
+import cz.preclikos.tvhstream.settings.ServerSettingsStore
 import cz.preclikos.tvhstream.stores.ChannelSelectionStore
 import cz.preclikos.tvhstream.viewmodels.AppConnectionViewModel
 import cz.preclikos.tvhstream.viewmodels.ChannelsViewModel
+import cz.preclikos.tvhstream.viewmodels.SettingsPlayerViewModel
 import cz.preclikos.tvhstream.viewmodels.VideoPlayerViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -33,12 +35,13 @@ val appModule = module {
 
     single<StatusService> { StatusServiceImpl() }
 
-    single { SettingsStore(context = get()) }
+    single { ServerSettingsStore(context = get()) }
     single { SecurePasswordStore(context = get()) }
+    single { PlayerSettingsStore(context = get()) }
 
     single { ChannelSelectionStore() }
 
-    single { PlayerSession(get()) }
+    single { PlayerSession(htsp = get(), playerSettingsStore = get()) }
 
     single<ImageLoader> {
         buildImageLoader(
@@ -58,4 +61,11 @@ val appModule = module {
     }
     viewModel { VideoPlayerViewModel(playerSession = get(), repo = get(), htspService = get()) }
     viewModel { ChannelsViewModel(repo = get()) }
+    viewModel {
+        SettingsPlayerViewModel(
+            settingsStore = get(),
+            htsp = get(),
+            io = get(named("io"))
+        )
+    }
 }

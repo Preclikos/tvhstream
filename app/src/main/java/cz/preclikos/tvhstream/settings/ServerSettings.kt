@@ -9,7 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "tvh_settings")
+val Context.dataStore by preferencesDataStore(name = "tvh_settings")
 
 data class ServerSettings(
     val host: String = "",
@@ -17,7 +17,7 @@ data class ServerSettings(
     val username: String = ""
 )
 
-class SettingsStore(private val context: Context) {
+class ServerSettingsStore(private val context: Context) {
 
     private object Keys {
         val HOST = stringPreferencesKey("host")

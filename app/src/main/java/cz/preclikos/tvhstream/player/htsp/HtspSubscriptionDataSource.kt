@@ -131,7 +131,7 @@ class HtspSubscriptionDataSource private constructor(
                             "subscriptionId" to subscriptionId,
                             "channelId" to channelId,
                             "timeshiftPeriod" to timeshiftPeriod,
-                            // "profile" to streamProfile  // pokud HTSP server podporuje
+                            "profile" to streamProfile
                         )
                     )
 

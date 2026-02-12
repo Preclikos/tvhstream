@@ -14,12 +14,25 @@
     <string name="epg_time_duration">Čas: %1$s – %2$s • Doba: %3$d min</string>
 
     <!-- Settings screen -->
-    <string name="settings_title">Nastavení</string>
+    <string name="settings_server">Nastavení – Připojení</string>
     <string name="host">Host</string>
     <string name="port_htsp">Htsp Port</string>
     <string name="port_http">Http Port</string>
     <string name="username">Uživatelské jméno</string>
     <string name="password">Heslo</string>
+
+    <string name="settings_player">Nastavení – Přehrávač</string>
+    <string name="profile">Profil</string>
+    <string name="audio_language">Jazyk zvuku</string>
+    <string name="subtitle_language">Jazyk titulků</string>
+
+    <string name="loading_wait">Načítání čeká…</string>
+    <string name="not_connected">Nepřipojeno</string>
+    <string name="loading">Načítám…</string>
+    <string name="loading_error">Chyba načtení</string>
+    <string name="select_profile">Vyber profil</string>
+
+    <string name="error_prefix">Chyba:</string>
 
     <string name="save">Uložit</string>
     <string name="back">Zpět</string>

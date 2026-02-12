@@ -1,7 +1,5 @@
 package cz.preclikos.tvhstream.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,8 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Event
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,10 +43,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import cz.preclikos.tvhstream.models.RailItem
-import cz.preclikos.tvhstream.ui.Routes
+import cz.preclikos.tvhstream.ui.screens.SettingsRoutes
 
 @Composable
-fun SideRail(
+fun SettingsSubRail(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -57,31 +54,22 @@ fun SideRail(
 ) {
     var railFocused by remember { mutableStateOf(false) }
 
-    val collapsedWidth = 64.dp
-    val expandedWidth = 220.dp
-    val width by animateDpAsState(
-        targetValue = if (railFocused) expandedWidth else collapsedWidth,
-        label = "railWidth"
-    )
-
     val items = remember {
         listOf(
-            RailItem(Routes.CHANNELS, "Channels") {
-                Icon(
-                    Icons.AutoMirrored.Filled.List,
-                    null,
-                    tint = Color.White
-                )
+            RailItem(SettingsRoutes.CONNECTION, "Connection") {
+                Icon(Icons.AutoMirrored.Filled.List, null, tint = Color.White)
             },
-            RailItem(Routes.EPG, "EPG") { Icon(Icons.Filled.Event, null, tint = Color.White) },
-            RailItem(Routes.SETTINGS, "Settings") {
-                Icon(
-                    Icons.Filled.Settings,
-                    null,
-                    tint = Color.White
-                )
-            },
+            RailItem(SettingsRoutes.PLAYER, "Player") {
+                Icon(Icons.Filled.PlayArrow, null, tint = Color.White)
+            }
         )
+    }
+
+    var didInit by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (didInit) return@LaunchedEffect
+        didInit = true
+        railFocusRequester.requestFocus()
     }
 
     val itemFocus = remember(items) { items.associate { it.route to FocusRequester() } }
@@ -95,21 +83,20 @@ fun SideRail(
     Column(
         modifier
             .focusRequester(railFocusRequester)
-            .width(width)
+            .width(180.dp)
             .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
             .onFocusChanged { railFocused = it.hasFocus }
             .focusable()
-            .padding(vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
 
         items.forEach { item ->
             val selected = currentRoute == item.route
-            SideRailItem(
+            SettingsSubRailItem(
                 selected = selected,
-                expanded = railFocused,
                 label = item.label,
                 icon = item.icon,
                 focusRequester = itemFocus.getValue(item.route),
@@ -125,32 +112,30 @@ fun SideRail(
 }
 
 @Composable
-private fun SideRailItem(
+private fun SettingsSubRailItem(
     selected: Boolean,
-    expanded: Boolean,
     label: String,
     icon: @Composable () -> Unit,
     focusRequester: FocusRequester,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(12.dp)
 
-    val bg =
-        when {
-            focused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-            selected -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.12f)
-            else -> Color.Transparent
-        }
+    val bg = when {
+        focused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        selected -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.10f)
+        else -> Color.Transparent
+    }
 
     val borderColor =
-        if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+        if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
         else Color.Transparent
 
     Row(
         modifier = Modifier
-            .padding(horizontal = 10.dp)
-            .height(52.dp)
+            .padding(horizontal = 8.dp)
+            .height(44.dp) // smaller row height
             .fillMaxWidth()
             .background(bg, shape)
             .border(1.dp, borderColor, shape)
@@ -159,16 +144,14 @@ private fun SideRailItem(
             .focusable()
             .onKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyDown &&
-                    (
-                            ev.key == Key.Enter ||
-                                    ev.key == Key.NumPadEnter ||
-                                    ev.key == Key.DirectionCenter ||
-                                    ev.key == Key.DirectionRight ||
-                                    ev.key == Key.ButtonThumbRight
+                    (ev.key == Key.Enter ||
+                            ev.key == Key.NumPadEnter ||
+                            ev.key == Key.DirectionCenter //||
+                            //ev.key == Key.DirectionRight ||
+                            //ev.key == Key.ButtonThumbRight
                             )
                 ) {
-                    onClick()
-                    true
+                    onClick(); true
                 } else false
             }
             .clickable(
@@ -176,20 +159,20 @@ private fun SideRailItem(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onClick() }
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { icon() }
-
-        Spacer(Modifier.width(14.dp))
-
-        AnimatedVisibility(visible = expanded) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.titleSmall,
-                color = Color.White,
-                maxLines = 1
-            )
+        Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) { // smaller icon box
+            icon()
         }
+
+        Spacer(Modifier.width(10.dp))
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge, // smaller text than titleSmall
+            color = Color.White,
+            maxLines = 1
+        )
     }
 }

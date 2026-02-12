@@ -2,8 +2,6 @@ package cz.preclikos.tvhstream.ui
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -24,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import cz.preclikos.tvhstream.ui.components.ContentContainer
 import cz.preclikos.tvhstream.ui.components.InfoBanner
 import cz.preclikos.tvhstream.ui.components.SideRail
 import cz.preclikos.tvhstream.ui.player.VideoPlayerScreen
@@ -43,22 +41,6 @@ object Routes {
 }
 
 @Composable
-fun ContentContainer(
-    contentFocus: FocusRequester,
-    content: @Composable () -> Unit
-) {
-    Box(
-        Modifier
-            .fillMaxSize()
-            .focusGroup()
-            .focusable()
-            .focusRequester(contentFocus)
-    ) {
-        content()
-    }
-}
-
-@Composable
 fun AppRoot() {
     val nav = rememberNavController()
     val context = LocalContext.current
@@ -75,7 +57,6 @@ fun AppRoot() {
     val showRail = topRoute != Routes.PLAYER
 
     val isPlayer = currentRoute?.startsWith(Routes.PLAYER) == true
-
 
     BackHandler {
         when (currentRoute) {
@@ -145,9 +126,7 @@ fun AppRoot() {
 
                     composable(Routes.SETTINGS) {
                         ContentContainer(contentFocus) {
-                            SettingsScreen(
-                                onDone = { nav.popBackStack() }
-                            )
+                            SettingsScreen()
                         }
                     }
 

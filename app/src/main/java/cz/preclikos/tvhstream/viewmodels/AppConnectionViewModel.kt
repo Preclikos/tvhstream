@@ -13,7 +13,7 @@ import cz.preclikos.tvhstream.services.StatusService
 import cz.preclikos.tvhstream.services.StatusSlot
 import cz.preclikos.tvhstream.services.UiText
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
-import cz.preclikos.tvhstream.settings.SettingsStore
+import cz.preclikos.tvhstream.settings.ServerSettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,7 +29,7 @@ class AppConnectionViewModel(
     private val htsp: HtspService,
     private val repo: TvhRepository,
     private val statusService: StatusService,
-    private val settings: SettingsStore,
+    private val settings: ServerSettingsStore,
     private val passwords: SecurePasswordStore,
 ) : ViewModel() {
 
