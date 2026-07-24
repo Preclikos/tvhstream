@@ -1,0 +1,84 @@
+<resources>
+    <string name="channel_list">Senderliste</string>
+
+    <string name="navigation_channels">Sender</string>
+    <string name="navigation_epg">Programm</string>
+    <string name="navigation_settings">Einstellungen</string>
+    <string name="navigation_language">Sprache</string>
+    <string name="navigation_connection">Verbindung</string>
+    <string name="navigation_player">Wiedergabe</string>
+
+    <string name="player_ends_in">Endet um %1$s</string>
+    <string name="player_next_event">Als Nächstes: %1$s</string>
+    <string name="player_next_event_with_range">Als Nächstes: %1$s • %2$s</string>
+
+    <string name="options">Optionen</string>
+    <string name="no_epg">Keine Programmdaten</string>
+    <string name="epg_next">Danach um %1$s</string>
+    <string name="select_channel_hint">Wählen Sie links einen Sender aus, um Details anzuzeigen.</string>
+
+    <string name="epg_time_duration">Zeit: %1$s – %2$s • Dauer: %3$d Min.</string>
+
+    <string name="settings_server">Einstellungen – Verbindung</string>
+    <string name="settings_language">Einstellungen – Sprache</string>
+    <string name="language_follow_system">Systemsprache verwenden</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_english">Englisch</string>
+    <string name="language_czech">Tschechisch</string>
+    <string name="host">Host</string>
+    <string name="port_htsp">HTSP-Port</string>
+    <string name="port_http">HTTP-Port</string>
+    <string name="username">Benutzername</string>
+    <string name="password">Passwort</string>
+
+    <string name="settings_player">Einstellungen – Wiedergabe</string>
+    <string name="profile">Profil</string>
+    <string name="audio_language">Audiosprache</string>
+    <string name="subtitle_language">Untertitelsprache</string>
+
+    <string name="loading_wait">Warten auf Ladevorgang…</string>
+    <string name="not_connected">Nicht verbunden</string>
+    <string name="loading">Wird geladen…</string>
+    <string name="loading_error">Fehler beim Laden</string>
+    <string name="select_profile">Profil auswählen</string>
+
+    <string name="error_prefix">Fehler:</string>
+
+    <string name="save">Speichern</string>
+    <string name="back">Zurück</string>
+
+    <string name="show_password">Passwort anzeigen</string>
+    <string name="hide_password">Passwort ausblenden</string>
+
+    <string name="audio_track">Tonspur</string>
+    <string name="no_audio_tracks">Keine Tonspuren verfügbar.</string>
+
+    <string name="subtitles">Untertitel</string>
+    <string name="subtitles_off">Aus</string>
+    <string name="no_subtitles">Keine Untertitel verfügbar.</string>
+
+    <string name="close">Schließen</string>
+
+    <string name="epg_title">Programm</string>
+    <string name="epg_schedule">Programmübersicht</string>
+    <string name="epg_loading">Programm wird geladen…</string>
+
+    <string name="play">Abspielen</string>
+    <string name="stop">Beenden</string>
+
+    <string name="tvh_target_invalid">Ungültiges Streaming-Ziel</string>
+    <string name="tvh_no_free_adapter">Kein freier Tuner verfügbar</string>
+    <string name="tvh_mux_not_enabled">Multiplex ist nicht aktiviert</string>
+    <string name="tvh_tuning_failed">Sender konnte nicht eingestellt werden</string>
+    <string name="tvh_bad_signal">Schlechtes Signal</string>
+    <string name="tvh_scrambled">Sender ist verschlüsselt</string>
+    <string name="tvh_subscription_overridden">Stream-Anforderung wurde überschrieben</string>
+    <string name="tvh_no_input">Kein Eingangssignal</string>
+
+    <string name="status_epg_loading">Programm wird geladen…</string>
+    <string name="status_epg_warmup">Programmdaten: %1$d/%2$d geladen</string>
+    <string name="status_epg_steady_warmup">Programm: bereit (%1$d/%2$d geladen)</string>
+    <string name="status_epg_warmup_batch">Programmdaten: %1$d/%2$d geladen (%3$d/%4$d aktualisiert)</string>
+    <string name="status_channels_ready">Sender verfügbar: %1$d</string>
+    <string name="status_syncing_channels">Sender werden synchronisiert… %1$d</string>
+</resources>

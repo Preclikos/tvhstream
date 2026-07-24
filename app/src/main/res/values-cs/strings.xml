@@ -1,6 +1,13 @@
 <resources>
     <string name="channel_list">Seznam kanálů</string>
 
+    <string name="navigation_channels">Kanály</string>
+    <string name="navigation_epg">Program</string>
+    <string name="navigation_settings">Nastavení</string>
+    <string name="navigation_language">Jazyk</string>
+    <string name="navigation_connection">Připojení</string>
+    <string name="navigation_player">Přehrávač</string>
+
     <string name="player_ends_in">Končí v: %1$s</string>
     <string name="player_next_event">Následuje: %1$s</string>
     <string name="player_next_event_with_range">Následuje: %1$s • %2$s</string>
@@ -15,6 +22,11 @@
 
     <!-- Settings screen -->
     <string name="settings_server">Nastavení – Připojení</string>
+    <string name="settings_language">Nastavení – Jazyk</string>
+    <string name="language_follow_system">Podle systému</string>
+    <string name="language_german">Němčina</string>
+    <string name="language_english">Angličtina</string>
+    <string name="language_czech">Čeština</string>
     <string name="host">Host</string>
     <string name="port_htsp">Htsp Port</string>
     <string name="port_http">Http Port</string>
@@ -59,6 +71,7 @@
     <string name="epg_loading">Načítání programu…</string>
 
     <string name="play">Přehrát</string>
+    <string name="stop">Zastavit</string>
 
     <string name="tvh_target_invalid">Neplatný cíl streamu</string>
     <string name="tvh_no_free_adapter">Není volný tuner</string>
