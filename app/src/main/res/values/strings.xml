@@ -39,6 +39,8 @@
     <string name="profile">Profile</string>
     <string name="audio_language">Audio Language</string>
     <string name="subtitle_language">Subtitle Language</string>
+    <string name="remember_last_played_channel">Remember last played channel</string>
+    <string name="remember_last_played_channel_summary">Restore it as the initial channel selection when the app starts.</string>
 
     <string name="loading_wait">Waiting for loading…</string>
     <string name="not_connected">Not connected</string>

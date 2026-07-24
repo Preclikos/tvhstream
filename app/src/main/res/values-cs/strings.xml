@@ -37,6 +37,8 @@
     <string name="profile">Profil</string>
     <string name="audio_language">Jazyk zvuku</string>
     <string name="subtitle_language">Jazyk titulků</string>
+    <string name="remember_last_played_channel">Zapamatovat poslední přehrávaný kanál</string>
+    <string name="remember_last_played_channel_summary">Po spuštění aplikace jej obnovit jako výchozí vybraný kanál.</string>
 
     <string name="loading_wait">Načítání čeká…</string>
     <string name="not_connected">Nepřipojeno</string>

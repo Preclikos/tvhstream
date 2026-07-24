@@ -42,7 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import cz.preclikos.tvhstream.R
+import cz.preclikos.tvhstream.core.LastPlayedChannelPolicy
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
+import cz.preclikos.tvhstream.settings.PlayerSettingsStore
 import cz.preclikos.tvhstream.stores.ChannelSelectionStore
 import cz.preclikos.tvhstream.ui.common.formatHm
 import cz.preclikos.tvhstream.ui.common.progress
@@ -59,11 +61,13 @@ import org.koin.compose.koinInject
 fun ChannelsScreen(
     channelViewModel: ChannelsViewModel = koinViewModel(),
     selection: ChannelSelectionStore = koinInject(),
+    settingsStore: PlayerSettingsStore = koinInject(),
     imageLoader: ImageLoader = koinInject(),
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit
 ) {
     val channels by channelViewModel.channels.collectAsState()
     val selectedId by selection.selectedId.collectAsState()
+    val playerSettings by settingsStore.playerSettings.collectAsState(initial = null)
     var didInitialRestore by remember { mutableStateOf(false) }
     var isRestoring by remember { mutableStateOf(false) }
 
@@ -88,16 +92,31 @@ fun ChannelsScreen(
         }
     }
 
-    LaunchedEffect(channels) {
-        if (channels.isEmpty()) return@LaunchedEffect
-        if (selectedId == -1) selection.setSelected(channels.first().id)
+    LaunchedEffect(channels, playerSettings) {
+        val settings = playerSettings ?: return@LaunchedEffect
+        if (selectedId != -1) return@LaunchedEffect
+
+        LastPlayedChannelPolicy.resolve(
+            orderedIds = channels.map { it.id },
+            persistedId = settings.lastPlayedChannelId,
+            enabled = settings.rememberLastPlayedChannel,
+        )?.let(selection::setSelected)
     }
 
-    LaunchedEffect(channels, selectedId) {
+    LaunchedEffect(channels, selectedId, playerSettings) {
         if (didInitialRestore) return@LaunchedEffect
         if (channels.isEmpty()) return@LaunchedEffect
+        val settings = playerSettings ?: return@LaunchedEffect
 
-        val id = if (selectedId == -1) channels.first().id else selectedId
+        val id = if (selectedId == -1) {
+            LastPlayedChannelPolicy.resolve(
+                orderedIds = channels.map { it.id },
+                persistedId = settings.lastPlayedChannelId,
+                enabled = settings.rememberLastPlayedChannel,
+            ) ?: return@LaunchedEffect
+        } else {
+            selectedId
+        }
         val idx = channels.indexOfFirst { it.id == id }
         if (idx < 0) return@LaunchedEffect
 
