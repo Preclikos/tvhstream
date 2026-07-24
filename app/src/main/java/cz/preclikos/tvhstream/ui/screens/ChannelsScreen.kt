@@ -162,6 +162,8 @@ fun ChannelsScreen(
                             name = ch.name,
                             programTitle = now?.title ?: stringResource(R.string.no_epg),
                             progress = if (now != null) prog else null,
+                            imageLoader = imageLoader,
+                            piconPath = ch.icon,
                             focused = isSelected,
                             onFocus = {
                                 if (!isRestoring) selection.setSelected(ch.id)

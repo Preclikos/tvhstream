@@ -28,6 +28,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.ImageLoader
 
 @Composable
 fun ChannelRow(
@@ -36,6 +37,8 @@ fun ChannelRow(
     name: String,
     programTitle: String,
     progress: Float?,
+    imageLoader: ImageLoader,
+    piconPath: String?,
     focused: Boolean,
     onFocus: () -> Unit,
     onConfirm: () -> Unit
@@ -84,6 +87,16 @@ fun ChannelRow(
             )
 
             Spacer(Modifier.width(6.dp))
+
+            PiconBox(
+                imageLoader = imageLoader,
+                piconPath = piconPath,
+                modifier = Modifier
+                    .width(52.dp)
+                    .height(38.dp),
+            )
+
+            Spacer(Modifier.width(10.dp))
 
             Column(Modifier.weight(1f)) {
                 Text(

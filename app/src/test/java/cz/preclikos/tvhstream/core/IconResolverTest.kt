@@ -20,11 +20,19 @@ class IconResolverTest {
     }
 
     @Test
-    fun rawHttpUrls_areNotFetched_overPureHtsp() {
-        // Pure-HTSP client: raw remote URLs resolve to null (placeholder), never HTTP.
-        assertNull(resolvePiconModel("default", "http://host/icon.png"))
-        assertNull(resolvePiconModel("default", "https://host/icon.png"))
-        assertNull(resolvePiconModel("default", "HTTPS://HOST/icon.png"))
+    fun rawHttpUrls_areLoadedDirectly() {
+        assertEquals(
+            "http://host/icon.png",
+            resolvePiconModel("default", "http://host/icon.png")
+        )
+        assertEquals(
+            "https://host/icon.png",
+            resolvePiconModel("default", " https://host/icon.png ")
+        )
+        assertEquals(
+            "HTTPS://HOST/icon.png",
+            resolvePiconModel("default", "HTTPS://HOST/icon.png")
+        )
     }
 
     @Test

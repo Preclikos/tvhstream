@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Stop
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
+import coil3.ImageLoader
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.settings.AspectRatioMode
@@ -48,11 +50,14 @@ import cz.preclikos.tvhstream.ui.common.formatClock
 import cz.preclikos.tvhstream.ui.common.formatHms
 import cz.preclikos.tvhstream.ui.common.progress
 import cz.preclikos.tvhstream.ui.components.RoundIconButton
+import cz.preclikos.tvhstream.ui.components.PiconBox
 
 @Composable
 fun OverlayControlsTv(
     player: Player,
+    imageLoader: ImageLoader,
     channelName: String,
+    piconPath: String?,
     nowEvent: EpgEventEntry?,
     nextEvent: EpgEventEntry?,
     nowSec: Long,
@@ -108,6 +113,17 @@ fun OverlayControlsTv(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
+                PiconBox(
+                    imageLoader = imageLoader,
+                    piconPath = piconPath,
+                    modifier = Modifier
+                        .width(96.dp)
+                        .height(68.dp)
+                        .padding(6.dp),
+                )
+
+                Spacer(Modifier.width(14.dp))
+
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = title,
