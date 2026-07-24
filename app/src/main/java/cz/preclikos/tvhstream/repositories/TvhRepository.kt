@@ -14,6 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -119,14 +120,7 @@ class TvhRepository(
     // Channels
     // ---------------------------
 
-    private data class ChannelEntry(
-        val id: Int,
-        val name: String,
-        val number: Int?,
-        val icon: String?
-    )
-
-    private val channelMap = linkedMapOf<Int, ChannelEntry>()
+    private val channelStore = ChannelSnapshotStore()
     private val _channelsUi = MutableStateFlow<List<ChannelUi>>(emptyList())
     val channelsUi: StateFlow<List<ChannelUi>> = _channelsUi
 
@@ -164,7 +158,7 @@ class TvhRepository(
         if (started) return
         started = true
 
-        scope.launch {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             htsp.controlEvents.collect { e ->
                 when (e) {
                     is HtspEvent.ServerMessage -> handleServerMessage(e.msg)
@@ -181,7 +175,7 @@ class TvhRepository(
 
     suspend fun onNewConnectionStarting() {
         stateMutex.withLock {
-            channelMap.clear()
+            channelStore.reset()
             _channelsUi.value = emptyList()
 
             epgByChannel.clear()
@@ -366,20 +360,13 @@ class TvhRepository(
      * Prioritize the ones with the smallest coveredTo first.
      */
     private fun pickChannelsNeedingTopUpLocked(nowSec: Long, limit: Int): List<Int> {
-        if (channelMap.isEmpty()) return emptyList()
+        if (channelStore.isEmpty()) return emptyList()
 
         val wantWarmTo = nowSec + warmupFutureSec
         val wantMinTo = nowSec + steadyMinFutureSec
 
         // Order channels by number/name, but select targets by "how far behind horizon they are"
-        val sortedIds = channelMap.values
-            .sortedWith(
-                compareBy(
-                    { it.number == null },
-                    { it.number ?: Int.MAX_VALUE },
-                    { it.name.lowercase() },
-                    { it.id })
-            )
+        val sortedIds = channelStore.snapshot()
             .map { it.id }
 
         val candidates = sortedIds.asSequence()
@@ -397,10 +384,10 @@ class TvhRepository(
     }
 
     private fun warmupProgressLocked(nowSec: Long): Pair<Int, Int> {
-        val total = channelMap.size
+        val total = channelStore.size
         if (total == 0) return 0 to 0
         val wantWarmTo = nowSec + warmupFutureSec
-        val done = channelMap.keys.count { id ->
+        val done = channelStore.ids().count { id ->
             val cov = epgCoverage[id]
             cov != null && cov.coveredTo >= wantWarmTo
         }
@@ -418,9 +405,9 @@ class TvhRepository(
 
             "initialSyncCompleted" -> {
                 val count = stateMutex.withLock {
-                    publishChannelsLocked()
+                    publishChannelsLocked(channelStore.completeInitialSync())
                     if (!channelsReadyDef.isCompleted) channelsReadyDef.complete(Unit)
-                    channelMap.size
+                    channelStore.size
                 }
                 setStatus(
                     UiText.Res(R.string.status_channels_ready, listOf(count)),
@@ -436,7 +423,7 @@ class TvhRepository(
 
     private fun handleChannelLocked(msg: HtspMessage) {
         val id = msg.int("channelId") ?: return
-        val existing = channelMap[id]
+        val existing = channelStore[id]
         val isNew = existing == null
 
         val name = msg.str("channelName") ?: existing?.name ?: return
@@ -448,12 +435,12 @@ class TvhRepository(
             ?: existing?.number
         val icon = msg.str("channelIcon") ?: existing?.icon
 
-        channelMap[id] = ChannelEntry(id, name, number, icon)
+        val snapshot = channelStore.upsert(ChannelMetadata(id, name, number, icon))
         epgCoverage.getOrPut(id) { EpgCoverage() }
 
-        publishChannelsLocked()
+        snapshot?.let(::publishChannelsLocked)
         setStatusThrottled(
-            UiText.Res(R.string.status_syncing_channels, listOf(channelMap.size)),
+            UiText.Res(R.string.status_syncing_channels, listOf(channelStore.size)),
             StatusSlot.SYNC,
             minIntervalMs = 700
         )
@@ -466,29 +453,19 @@ class TvhRepository(
     private fun handleChannelDeleteLocked(msg: HtspMessage) {
         val id = msg.int("channelId") ?: return
 
-        channelMap.remove(id)
+        val snapshot = channelStore.delete(id)
         epgByChannel.remove(id)
         epgCoverage.remove(id)
         epgInFlight.remove(id)
 
-        publishChannelsLocked()
+        snapshot?.let(::publishChannelsLocked)
     }
 
-    private fun publishChannelsLocked() {
-        val sorted = channelMap.values
-            .sortedWith(
-                compareBy(
-                    { it.number == null },
-                    { it.number ?: Int.MAX_VALUE },
-                    { it.name.lowercase() },
-                    { it.id })
-            )
-            .map { ChannelUi(it.id, formatName(it), it.icon) }
-
-        _channelsUi.value = sorted
+    private fun publishChannelsLocked(channels: List<ChannelMetadata>) {
+        _channelsUi.value = channels.map { ChannelUi(it.id, formatName(it), it.icon) }
     }
 
-    private fun formatName(c: ChannelEntry): String =
+    private fun formatName(c: ChannelMetadata): String =
         if (c.number != null) "${c.number}  ${c.name}" else c.name
 
     // ---------------------------
