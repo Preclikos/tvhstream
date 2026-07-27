@@ -27,7 +27,8 @@ sealed interface ProfilesUiState {
 data class SettingsPlayerUiState(
     val connected: Boolean = false,
     val profiles: ProfilesUiState = ProfilesUiState.Idle,
-    val selectedProfileUuid: String? = null
+    val selectedProfileUuid: String? = null,
+    val rememberLastPlayedChannel: Boolean = false,
 )
 
 class SettingsPlayerViewModel(
@@ -44,6 +45,14 @@ class SettingsPlayerViewModel(
         viewModelScope.launch {
             htsp.state.collect { st ->
                 _ui.value = _ui.value.copy(connected = st is ConnectionState.Connected)
+            }
+        }
+
+        viewModelScope.launch {
+            settingsStore.playerSettings.collect { settings ->
+                _ui.value = _ui.value.copy(
+                    rememberLastPlayedChannel = settings.rememberLastPlayedChannel
+                )
             }
         }
 
@@ -91,6 +100,13 @@ class SettingsPlayerViewModel(
 
         viewModelScope.launch {
             settingsStore.setProfile(profile.name)
+        }
+    }
+
+    fun onRememberLastPlayedChannelChanged(enabled: Boolean) {
+        _ui.value = _ui.value.copy(rememberLastPlayedChannel = enabled)
+        viewModelScope.launch {
+            settingsStore.setRememberLastPlayedChannel(enabled)
         }
     }
 

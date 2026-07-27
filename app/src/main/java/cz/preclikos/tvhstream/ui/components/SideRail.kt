@@ -43,8 +43,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.models.RailItem
 import cz.preclikos.tvhstream.ui.Routes
 
@@ -64,17 +66,20 @@ fun SideRail(
         label = "railWidth"
     )
 
-    val items = remember {
+    val channelsLabel = stringResource(R.string.navigation_channels)
+    val epgLabel = stringResource(R.string.navigation_epg)
+    val settingsLabel = stringResource(R.string.navigation_settings)
+    val items = remember(channelsLabel, epgLabel, settingsLabel) {
         listOf(
-            RailItem(Routes.CHANNELS, "Channels") {
+            RailItem(Routes.CHANNELS, channelsLabel) {
                 Icon(
                     Icons.AutoMirrored.Filled.List,
                     null,
                     tint = Color.White
                 )
             },
-            RailItem(Routes.EPG, "EPG") { Icon(Icons.Filled.Event, null, tint = Color.White) },
-            RailItem(Routes.SETTINGS, "Settings") {
+            RailItem(Routes.EPG, epgLabel) { Icon(Icons.Filled.Event, null, tint = Color.White) },
+            RailItem(Routes.SETTINGS, settingsLabel) {
                 Icon(
                     Icons.Filled.Settings,
                     null,

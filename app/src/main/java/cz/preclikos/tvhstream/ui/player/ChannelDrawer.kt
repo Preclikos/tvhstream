@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import coil3.ImageLoader
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.ChannelUi
 import cz.preclikos.tvhstream.ui.common.progress
@@ -46,6 +47,7 @@ fun ChannelDrawer(
     selectedId: Int,
     nowSec: Long,
     channelsVm: ChannelsViewModel,
+    imageLoader: ImageLoader,
     onFocusChannel: (Int) -> Unit,
     onPickChannel: (ChannelUi) -> Unit,
     focusRequester: FocusRequester,
@@ -121,6 +123,8 @@ fun ChannelDrawer(
                     name = ch.name,
                     programTitle = now?.title ?: stringResource(R.string.no_epg),
                     progress = if (now != null) prog else null,
+                    imageLoader = imageLoader,
+                    piconPath = ch.icon,
                     focused = isSelected,
                     onFocus = { if (!isRestoring) onFocusChannel(ch.id) },
                     onConfirm = { onPickChannel(ch) }

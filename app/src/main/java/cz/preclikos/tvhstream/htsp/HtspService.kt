@@ -48,11 +48,8 @@ class HtspService(
 
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
-    private val _controlEvents = MutableSharedFlow<HtspEvent>(
-        extraBufferCapacity = 256,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
-    val controlEvents: SharedFlow<HtspEvent> = _controlEvents
+    private val controlEventStream = HtspEventStream()
+    val controlEvents: SharedFlow<HtspEvent> = controlEventStream.events
 
     private val _muxEvents = MutableSharedFlow<HtspMessage>(
         extraBufferCapacity = 8192,
@@ -325,7 +322,7 @@ class HtspService(
                     if (msg.method == "muxpkt") {
                         _muxEvents.tryEmit(msg)
                     } else {
-                        _controlEvents.tryEmit(HtspEvent.ServerMessage(msg))
+                        controlEventStream.emit(HtspEvent.ServerMessage(msg))
                     }
                 } catch (t: SocketTimeoutException) {
                     val now = System.currentTimeMillis()
@@ -404,7 +401,7 @@ class HtspService(
     private suspend fun failAll(t: Throwable) {
         connectMutex.withLock {
             _state.value = ConnectionState.Error(t)
-            _controlEvents.tryEmit(HtspEvent.ConnectionError(t))
+            controlEventStream.emit(HtspEvent.ConnectionError(t))
 
             val defs = pending.values.toList()
             pending.clear()
