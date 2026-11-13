@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conn_not_configured_title">Server einrichten</string>
+    <string name="conn_not_configured_hint">Geben Sie in den Einstellungen die Tvheadend-Adresse ein, um Ihre Sender zu laden.</string>
+    <string name="conn_unreachable_title">Server nicht erreichbar</string>
+    <string name="conn_unreachable_hint">Prüfen Sie, ob Tvheadend läuft und Adresse und Port in den Einstellungen stimmen.</string>
+    <string name="conn_timeout_title">Der Server antwortet nicht</string>
+    <string name="conn_timeout_hint">Die Verbindung wurde angenommen, aber nicht rechtzeitig beantwortet. Prüfen Sie, ob der Port der HTSP-Port ist (9982, mit TLS 9983).</string>
+    <string name="conn_auth_title">Anmeldung fehlgeschlagen</string>
+    <string name="conn_auth_hint">Tvheadend hat Benutzername oder Passwort nicht akzeptiert. Prüfen Sie sie in den Einstellungen.</string>
+    <string name="conn_tls_untrusted_title">Serverzertifikat bestätigen</string>
+    <string name="conn_tls_untrusted_hint">Vergleichen Sie den Fingerabdruck mit dem in Tvheadend und vertrauen Sie ihm, um zu verbinden.</string>
+    <string name="conn_tls_changed_title">Serverzertifikat hat sich geändert</string>
+    <string name="conn_tls_changed_hint">Zu Ihrer Sicherheit nicht verbunden. Wenn Sie das Zertifikat in Tvheadend ersetzt haben, löschen Sie den Fingerabdruck in den Einstellungen.</string>
+    <string name="conn_tls_failed_title">Verschlüsselte Verbindung fehlgeschlagen</string>
+    <string name="conn_tls_failed_hint">Prüfen Sie, ob TLS am Server aktiv ist und der Port sein TLS-Port ist (meist 9983).</string>
+    <string name="conn_other_title">Verbindung fehlgeschlagen</string>
+    <string name="conn_other_hint">Prüfen Sie die Servereinstellungen oder warten Sie, die App versucht es erneut.</string>
+    <string name="conn_retrying">Neuer Versuch…</string>
+</resources>

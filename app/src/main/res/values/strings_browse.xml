@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conn_not_configured_title">Set up your server</string>
+    <string name="conn_not_configured_hint">Enter your Tvheadend address in Settings to load your channels.</string>
+    <string name="conn_unreachable_title">Can\'t reach the server</string>
+    <string name="conn_unreachable_hint">Check that Tvheadend is running and that the address and port in Settings are right.</string>
+    <string name="conn_timeout_title">The server isn\'t answering</string>
+    <string name="conn_timeout_hint">It accepted the connection but didn\'t reply in time. Check that the port is the HTSP port (9982, or 9983 with TLS).</string>
+    <string name="conn_auth_title">Sign-in failed</string>
+    <string name="conn_auth_hint">Tvheadend didn\'t accept the username or password. Check them in Settings.</string>
+    <string name="conn_tls_untrusted_title">Confirm the server certificate</string>
+    <string name="conn_tls_untrusted_hint">Compare the fingerprint with the one in Tvheadend and trust it to connect.</string>
+    <string name="conn_tls_changed_title">Server certificate has changed</string>
+    <string name="conn_tls_changed_hint">Not connected, for your safety. If you replaced the certificate in Tvheadend, clear the fingerprint in Settings.</string>
+    <string name="conn_tls_failed_title">Secure connection failed</string>
+    <string name="conn_tls_failed_hint">Check that TLS is enabled on the server and that the port is its TLS port (usually 9983).</string>
+    <string name="conn_other_title">Couldn\'t connect</string>
+    <string name="conn_other_hint">Check the server settings, or wait while the app tries again.</string>
+    <string name="conn_retrying">Trying again…</string>
+</resources>

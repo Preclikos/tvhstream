@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conn_not_configured_title">Nastavte server</string>
+    <string name="conn_not_configured_hint">Zadejte v Nastavení adresu Tvheadendu a načtou se kanály.</string>
+    <string name="conn_unreachable_title">Server není dostupný</string>
+    <string name="conn_unreachable_hint">Zkontrolujte, že Tvheadend běží a že adresa a port v Nastavení jsou správně.</string>
+    <string name="conn_timeout_title">Server neodpovídá</string>
+    <string name="conn_timeout_hint">Spojení přijal, ale včas neodpověděl. Zkontrolujte, že port je HTSP port (9982, s TLS 9983).</string>
+    <string name="conn_auth_title">Přihlášení selhalo</string>
+    <string name="conn_auth_hint">Tvheadend nepřijal uživatelské jméno nebo heslo. Zkontrolujte je v Nastavení.</string>
+    <string name="conn_tls_untrusted_title">Potvrďte certifikát serveru</string>
+    <string name="conn_tls_untrusted_hint">Porovnejte otisk s tím v Tvheadendu a potvrďte ho, aby se aplikace připojila.</string>
+    <string name="conn_tls_changed_title">Certifikát serveru se změnil</string>
+    <string name="conn_tls_changed_hint">Kvůli bezpečnosti nepřipojeno. Pokud jste certifikát v Tvheadendu vyměnili, smažte otisk v Nastavení.</string>
+    <string name="conn_tls_failed_title">Šifrované spojení selhalo</string>
+    <string name="conn_tls_failed_hint">Zkontrolujte, že má server zapnuté TLS a že port je jeho TLS port (obvykle 9983).</string>
+    <string name="conn_other_title">Nepodařilo se připojit</string>
+    <string name="conn_other_hint">Zkontrolujte nastavení serveru, nebo počkejte, aplikace to zkusí znovu.</string>
+    <string name="conn_retrying">Zkouším znovu…</string>
+</resources>
