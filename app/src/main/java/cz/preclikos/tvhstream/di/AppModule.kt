@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.di
 
+import cz.preclikos.tvhstream.recordings.RecordingsRepository
 import coil3.ImageLoader
 import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.htsp.buildImageLoader
@@ -40,6 +41,10 @@ val appModule = module {
     single { PlayerSettingsStore(context = get()) }
 
     single { ChannelSelectionStore() }
+
+    single(createdAtStart = true) {
+        RecordingsRepository(htsp = get(), ioDispatcher = get(named("io")))
+    }
 
     single { PlayerSession(htsp = get(), playerSettingsStore = get()) }
 

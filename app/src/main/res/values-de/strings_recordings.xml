@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_recordings">Aufnahmen</string>
+    <string name="recordings_title">Aufnahmen</string>
+    <string name="recordings_empty">Keine Aufnahmen</string>
+    <string name="recordings_in_progress">● Wird aufgenommen</string>
+    <string name="recordings_duration_min">%d Min.</string>
+    <string name="recordings_not_found">Aufnahme nicht gefunden</string>
+    <string name="recordings_play_failed">Aufnahme kann nicht abgespielt werden</string>
+</resources>

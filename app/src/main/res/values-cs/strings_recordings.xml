@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_recordings">Nahrávky</string>
+    <string name="recordings_title">Nahrávky</string>
+    <string name="recordings_empty">Žádné nahrávky</string>
+    <string name="recordings_in_progress">● Nahrává se</string>
+    <string name="recordings_duration_min">%d min</string>
+    <string name="recordings_not_found">Nahrávka nenalezena</string>
+    <string name="recordings_play_failed">Nahrávku nelze přehrát</string>
+</resources>
