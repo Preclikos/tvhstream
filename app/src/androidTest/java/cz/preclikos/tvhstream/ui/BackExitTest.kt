@@ -19,13 +19,12 @@ class BackExitTest {
     fun backOnHome_finishesActivity_withoutKillingProcess() {
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        // Unconfigured app may start on Settings, where Back first returns to Channels.
-        repeat(3) {
-            if (scenario.state == Lifecycle.State.DESTROYED) return@repeat
-            Espresso.pressBackUnconditionally()
-            instrumentation.waitForIdleSync()
-            Thread.sleep(500)
-        }
+        instrumentation.waitForIdleSync()
+        Thread.sleep(1_000) // let the home screen settle and take focus
+        // ONE press must exit (Compose's focus-exit used to swallow the first one).
+        Espresso.pressBackUnconditionally()
+        instrumentation.waitForIdleSync()
+        Thread.sleep(500)
         // Still running → the process survived; the activity is gone.
         assertEquals(Lifecycle.State.DESTROYED, scenario.state)
     }

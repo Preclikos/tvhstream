@@ -1,5 +1,10 @@
 package cz.preclikos.tvhstream.ui
 
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.tween
@@ -96,7 +101,19 @@ fun AppRoot() {
     }
 
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            // Compose maps Back to FocusDirection.Exit: with focus inside the rail or the
+            // content focus group, the first Back only left the group and was consumed,
+            // so exiting took two presses. On the home screens, handle Back here first.
+            .onPreviewKeyEvent { event ->
+                if (event.key != Key.Back) return@onPreviewKeyEvent false
+                if (currentRoute != Routes.CHANNELS && currentRoute != Routes.EPG) {
+                    return@onPreviewKeyEvent false
+                }
+                if (event.type == KeyEventType.KeyUp) activity?.finishAffinity()
+                true
+            },
         color = MaterialTheme.colorScheme.background
     ) {
         Row(Modifier.fillMaxSize()) {
