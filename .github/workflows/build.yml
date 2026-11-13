@@ -25,9 +25,10 @@ jobs:
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
-          targetSdk: '35'
+          # The legacy 'tools' package (v3 default) is gone from the SDK repo.
+          packages: 'platform-tools'
       
       - name: Install BuildTools
         run: sdkmanager --install "build-tools;35.0.0"
