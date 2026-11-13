@@ -42,8 +42,9 @@ fun SettingsScreen() {
     BackHandler {
         when (currentRoute) {
             Routes.CHANNELS, Routes.EPG -> {
-                activity?.finishAffinity()
-                kotlin.system.exitProcess(0)
+                // Let the activity finish normally; AppConnectionViewModel.onCleared
+                // tears down the HTSP connection and EPG worker.
+                activity?.finish()
             }
 
             Routes.SETTINGS -> {

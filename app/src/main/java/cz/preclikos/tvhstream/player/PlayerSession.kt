@@ -2,6 +2,7 @@ package cz.preclikos.tvhstream.player
 
 import android.content.Context
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -32,7 +33,9 @@ class PlayerSession(
 ) {
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var player: ExoPlayer? = null
-    private lateinit var dataSourceFactory: HtspSubscriptionDataSource.Factory
+    // Null until the first playService(); stop()/release() can legitimately run before that
+    // (e.g. the player screen is stopped before playback ever started).
+    private var dataSourceFactory: HtspSubscriptionDataSource.Factory? = null
 
     private var subscriptionId: Int? = null
 
@@ -64,6 +67,14 @@ class PlayerSession(
         return player ?: ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(context))
+            // Request audio focus so Assistant / other apps can duck or pause us.
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true
+            )
             .build()
             .also { p ->
                 p.addAnalyticsListener(EventLogger())
@@ -101,9 +112,10 @@ class PlayerSession(
                 }
             }.build()
 
-            dataSourceFactory = HtspSubscriptionDataSource.Factory(context, htsp, settings.profile)
+            val factory = HtspSubscriptionDataSource.Factory(context, htsp, settings.profile)
+            dataSourceFactory = factory
             val mediaSource = ProgressiveMediaSource.Factory(
-                dataSourceFactory,
+                factory,
                 TvheadendExtractorsFactory()
             ).createMediaSource(MediaItem.fromUri("htsp://service/$serviceId"))
 
@@ -158,7 +170,6 @@ class PlayerSession(
 
     fun release() {
         watchdogJob?.cancel()
-        dataSourceFactory.releaseCurrentDataSource()
         mainScope.launch {
             player?.let { p ->
                 updateState(p)
@@ -171,10 +182,11 @@ class PlayerSession(
     }
 
     private fun unsubscribe() {
+        val factory = dataSourceFactory ?: return
         mainScope.launch {
             withContext(Dispatchers.IO)
             {
-                dataSourceFactory.releaseCurrentDataSource()
+                factory.releaseCurrentDataSource()
             }
         }
     }

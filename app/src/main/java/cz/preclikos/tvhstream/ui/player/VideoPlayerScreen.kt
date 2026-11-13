@@ -119,11 +119,22 @@ fun VideoPlayerScreen(
         aspectRatio = settings.aspectRatio
     }
 
+    var lastPlayedServiceId by remember { mutableIntStateOf(-1) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> screenActive = true
-                Lifecycle.Event.ON_STOP -> screenActive = false
+                Lifecycle.Event.ON_STOP -> {
+                    // Stop synchronously here, not via the LaunchedEffect below: that only
+                    // runs on the next frame, after the SurfaceView is already destroyed,
+                    // and ExoPlayer then blocks the main thread in setVideoOutput (ANR).
+                    if (lastPlayedServiceId != -1) {
+                        videoPlayerViewModel.stop()
+                        lastPlayedServiceId = -1
+                    }
+                    screenActive = false
+                }
                 else -> Unit
             }
         }
@@ -131,11 +142,12 @@ fun VideoPlayerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    var lastPlayedServiceId by remember { mutableIntStateOf(-1) }
     LaunchedEffect(screenActive, currentServiceId) {
         if (!screenActive) {
-            videoPlayerViewModel.stop()
-            lastPlayedServiceId = -1
+            if (lastPlayedServiceId != -1) {
+                videoPlayerViewModel.stop()
+                lastPlayedServiceId = -1
+            }
             return@LaunchedEffect
         }
 

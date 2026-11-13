@@ -360,10 +360,19 @@ class HtspService(
                 s?.isConnected == true && !s.isClosed
     }
 
+    /**
+     * Fails every in-flight request. Drains by key instead of `pending.values.toList()`:
+     * Kotlin's toList() reads size() and then iterator().next(), which throws
+     * NoSuchElementException if the reader loop removes the entry in between.
+     */
+    private fun failPending(t: Throwable) {
+        for (seq in pending.keys) {
+            pending.remove(seq)?.def?.completeExceptionally(t)
+        }
+    }
+
     private suspend fun disconnectInternal(t: Throwable) {
-        val defs = pending.values.toList()
-        pending.clear()
-        defs.forEach { it.def.completeExceptionally(t) }
+        failPending(t)
 
         initialSyncDef?.completeExceptionally(t)
         initialSyncDef = null
@@ -403,9 +412,7 @@ class HtspService(
             _state.value = ConnectionState.Error(t)
             controlEventStream.emit(HtspEvent.ConnectionError(t))
 
-            val defs = pending.values.toList()
-            pending.clear()
-            defs.forEach { it.def.completeExceptionally(t) }
+            failPending(t)
 
             initialSyncDef?.completeExceptionally(t)
             initialSyncDef = null

@@ -15,8 +15,10 @@ import cz.preclikos.tvhstream.services.StatusSlot
 import cz.preclikos.tvhstream.services.UiText
 import cz.preclikos.tvhstream.settings.SecurePasswordStore
 import cz.preclikos.tvhstream.settings.ServerSettingsStore
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -107,6 +109,20 @@ class AppConnectionViewModel(
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        // Activity is finishing (Back from home). The HTSP connection and EPG worker are
+        // app-scoped singletons, so shut them down explicitly instead of killing the process.
+        repo.stopEpgWorker()
+        CoroutineScope(Dispatchers.IO + NonCancellable).launch {
+            try {
+                htsp.disconnect()
+            } catch (t: Throwable) {
+                Timber.w(t, "Disconnect on exit failed")
+            }
+        }
+        super.onCleared()
     }
 
     private fun publishSubsStatus() {
