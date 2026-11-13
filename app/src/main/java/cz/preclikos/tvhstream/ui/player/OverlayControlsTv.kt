@@ -1,6 +1,5 @@
 package cz.preclikos.tvhstream.ui.player
 
-import cz.preclikos.tvhstream.ui.TvSafeArea
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +106,7 @@ fun OverlayControlsTv(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .background(topGradient)
-                .padding(horizontal = TvSafeArea.Horizontal, vertical = TvSafeArea.Vertical)
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -164,7 +163,7 @@ fun OverlayControlsTv(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(bottomGradient)
-                .padding(horizontal = TvSafeArea.Horizontal, vertical = TvSafeArea.Vertical)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),

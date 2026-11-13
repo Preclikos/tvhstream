@@ -1,6 +1,5 @@
 package cz.preclikos.tvhstream.ui.components
 
-import cz.preclikos.tvhstream.ui.TvSafeArea
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -101,13 +100,12 @@ fun SideRail(
     Column(
         modifier
             .focusRequester(railFocusRequester)
-            .width(width + TvSafeArea.Horizontal)
+            .width(width)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.65f))
             .onFocusChanged { railFocused = it.hasFocus }
             .focusable()
-            // Background bleeds to the screen edge; items stay inside the TV safe area.
-            .padding(start = TvSafeArea.Horizontal, top = TvSafeArea.Vertical, bottom = TvSafeArea.Vertical),
+            .padding(vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Spacer(Modifier.height(6.dp))

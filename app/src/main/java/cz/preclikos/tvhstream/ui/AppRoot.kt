@@ -100,14 +100,6 @@ fun AppRoot() {
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    // Safe area for content only; the rail's background reaches the edge.
-                    .then(
-                        if (showRail) Modifier.padding(
-                            end = TvSafeArea.Horizontal,
-                            top = TvSafeArea.Vertical,
-                            bottom = TvSafeArea.Vertical
-                        ) else Modifier
-                    )
             ) {
                 NavHost(
                     navController = nav,
