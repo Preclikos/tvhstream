@@ -27,7 +27,7 @@ class CertificateChangedException(val fingerprint: String, val pinned: String) :
     SSLException("Server certificate changed (SHA-256 $fingerprint, pinned $pinned)")
 
 /**
- * TLS for the encrypted HTSP port (Tvheadend `--htsp_tls_port`, standard 9983).
+ * TLS for the encrypted HTSP port (Tvheadend `--htsp_tls_port`, standard 9943).
  * Same trust model as Tvheadend's Python client:
  *  - with a pinned SHA-256 fingerprint, accept exactly that certificate (self-signed);
  *  - otherwise verify the chain against the system trust store and the host name.
@@ -35,7 +35,7 @@ class CertificateChangedException(val fingerprint: String, val pinned: String) :
  */
 object HtspTls {
     const val DEFAULT_PLAIN_PORT = 9982
-    const val DEFAULT_TLS_PORT = 9983
+    const val DEFAULT_TLS_PORT = 9943
 
     private val PROTOCOLS = listOf("TLSv1.3", "TLSv1.2")
 

@@ -148,9 +148,9 @@ class HtspTlsTest {
 
     @Test
     fun portForToggle_switchesOnlyDefaultPorts() {
-        assertEquals(9983, HtspTls.portForToggle(9982, tls = true))
-        assertEquals(9982, HtspTls.portForToggle(9983, tls = false))
-        assertEquals(9983, HtspTls.portForToggle(null, tls = true))
+        assertEquals(9943, HtspTls.portForToggle(9982, tls = true))
+        assertEquals(9982, HtspTls.portForToggle(9943, tls = false))
+        assertEquals(9943, HtspTls.portForToggle(null, tls = true))
         assertEquals(12345, HtspTls.portForToggle(12345, tls = true))
         assertEquals(12345, HtspTls.portForToggle(12345, tls = false))
     }

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="player_time_left">%1$s – %2$s • noch %3$d Min.</string>
     <string name="player_next_short">Danach • %1$s %2$s</string>
     <string name="channel_number_none">Kein Sender</string>
 </resources>

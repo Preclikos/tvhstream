@@ -1,13 +1,7 @@
 package cz.preclikos.tvhstream.core
 
-/** Small pure helpers for the player's info banner and busy indicator. */
+/** Small pure helpers for the player's busy indicator. */
 object PlayerInfoFormat {
-
-    /** Whole minutes left until [stopSec], rounded up so "0 min" only shows at the end. */
-    fun minutesLeft(nowSec: Long, stopSec: Long): Long {
-        val left = (stopSec - nowSec).coerceAtLeast(0L)
-        return (left + 59) / 60
-    }
 
     /** Spinner delay, so a quick buffering blip doesn't flash it on every zap. */
     const val BUSY_DELAY_TUNING_MS = 500L

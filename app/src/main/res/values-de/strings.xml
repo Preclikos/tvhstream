@@ -89,9 +89,7 @@
     <string name="playback_failed">Wiedergabe fehlgeschlagen</string>
     <string name="retry">Erneut versuchen</string>
     <string name="tls_enabled">Verschlüsselte Verbindung (TLS)</string>
-    <string name="tls_hint">Erfordert Tvheadend mit --htsp_tls_port (Standardport 9983).</string>
     <string name="tls_fingerprint">Zertifikat-Fingerabdruck (SHA-256)</string>
-    <string name="tls_fingerprint_hint">Wird ausgefüllt, wenn Sie dem Serverzertifikat vertrauen. Leer lassen für ein Zertifikat einer Zertifizierungsstelle.</string>
     <string name="tls_trust_title">Serverzertifikat prüfen</string>
     <string name="tls_trust_message">Der Server %1$s verwendet ein Zertifikat, das nicht von einer vertrauenswürdigen Stelle signiert ist (z. B. das selbstsignierte Zertifikat von Tvheadend). Vergleichen Sie den Fingerabdruck mit dem in Tvheadend (Configuration › General › Base).</string>
     <string name="tls_changed_title">Serverzertifikat hat sich geändert!</string>

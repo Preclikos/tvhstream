@@ -1,5 +1,7 @@
 package cz.preclikos.tvhstream.ui.screens.settings
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
@@ -79,6 +81,9 @@ fun SettingsConnection(
     Column(
         Modifier
             .fillMaxSize()
+            // With TLS on (fingerprint field + hint) Save no longer fits the screen;
+            // scrolling lets focus bring it into view.
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -153,12 +158,6 @@ fun SettingsConnection(
                     onValueChange = { fingerprint = it },
                     label = { Text(stringResource(R.string.tls_fingerprint)) }
                 )
-                Text(
-                    stringResource(R.string.tls_fingerprint_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
-                )
             }
 
             Spacer(Modifier.height(12.dp))
@@ -200,14 +199,11 @@ private fun TlsSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
             .testTag("tlsSwitch")
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.tls_enabled), style = MaterialTheme.typography.titleMedium)
-            Text(
-                stringResource(R.string.tls_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            stringResource(R.string.tls_enabled),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
         Switch(checked = checked, onCheckedChange = null)
     }
 }

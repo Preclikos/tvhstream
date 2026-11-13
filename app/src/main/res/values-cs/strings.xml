@@ -101,9 +101,7 @@
     <string name="playback_failed">Přehrávání selhalo</string>
     <string name="retry">Zkusit znovu</string>
     <string name="tls_enabled">Šifrované spojení (TLS)</string>
-    <string name="tls_hint">Vyžaduje Tvheadend spuštěný s --htsp_tls_port (výchozí port 9983).</string>
     <string name="tls_fingerprint">Otisk certifikátu (SHA-256)</string>
-    <string name="tls_fingerprint_hint">Vyplní se po potvrzení certifikátu serveru. Nechte prázdné pro certifikát od certifikační autority.</string>
     <string name="tls_trust_title">Ověřte certifikát serveru</string>
     <string name="tls_trust_message">Server %1$s používá certifikát, který není podepsaný důvěryhodnou autoritou (např. vlastní certifikát vygenerovaný Tvheadendem). Porovnejte otisk s tím v Tvheadendu (Configuration › General › Base).</string>
     <string name="tls_changed_title">Certifikát serveru se změnil!</string>

@@ -47,7 +47,6 @@ import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.settings.AspectRatioMode
 import androidx.compose.ui.platform.testTag
-import cz.preclikos.tvhstream.core.PlayerInfoFormat
 import cz.preclikos.tvhstream.ui.common.formatClock
 import cz.preclikos.tvhstream.ui.common.progress
 import cz.preclikos.tvhstream.ui.components.RoundIconButton
@@ -88,9 +87,6 @@ fun OverlayControlsTv(
     val clock = remember(nowSec) { formatClock(nowSec) }
     val startClock = remember(nowEvent) { nowEvent?.let { formatClock(it.start) }.orEmpty() }
     val endClock = remember(nowEvent) { nowEvent?.let { formatClock(it.stop) }.orEmpty() }
-    val minutesLeft = remember(nowEvent, nowSec) {
-        nowEvent?.let { PlayerInfoFormat.minutesLeft(nowSec, it.stop) }
-    }
     val progress = remember(nowEvent, nowSec) { nowEvent?.progress(nowSec) ?: 0f }
 
     val title = remember(nowEvent, channelName) { nowEvent?.title ?: channelName }
@@ -122,21 +118,6 @@ fun OverlayControlsTv(
                 Spacer(Modifier.width(14.dp))
 
                 Column(Modifier.weight(1f)) {
-                    // "20:00 – 21:00 • 45 min left" above the title.
-                    if (minutesLeft != null) {
-                        Text(
-                            text = stringResource(
-                                R.string.player_time_left,
-                                startClock,
-                                endClock,
-                                minutesLeft.toInt()
-                            ),
-                            color = Color.White.copy(alpha = 0.80f),
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            modifier = Modifier.testTag("playerTimeLeft")
-                        )
-                    }
                     Text(
                         text = title,
                         color = Color.White,

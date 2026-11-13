@@ -104,9 +104,7 @@
     <string name="playback_failed">Playback failed</string>
     <string name="retry">Retry</string>
     <string name="tls_enabled">Encrypted connection (TLS)</string>
-    <string name="tls_hint">Needs Tvheadend started with --htsp_tls_port (default port 9983).</string>
     <string name="tls_fingerprint">Certificate fingerprint (SHA-256)</string>
-    <string name="tls_fingerprint_hint">Filled in when you trust the server certificate. Leave empty for a certificate from a certificate authority.</string>
     <string name="tls_trust_title">Verify the server certificate</string>
     <string name="tls_trust_message">The server %1$s uses a certificate that is not signed by a trusted authority (for example the self-signed certificate Tvheadend generates). Compare the fingerprint with the one in Tvheadend (Configuration › General › Base).</string>
     <string name="tls_changed_title">Server certificate has changed!</string>
