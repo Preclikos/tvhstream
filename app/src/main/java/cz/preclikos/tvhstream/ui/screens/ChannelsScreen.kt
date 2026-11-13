@@ -1,5 +1,8 @@
 package cz.preclikos.tvhstream.ui.screens
 
+import cz.preclikos.tvhstream.ui.components.EmptyChannelsPane
+import cz.preclikos.tvhstream.htsp.HtspService
+import cz.preclikos.tvhstream.core.ChannelsEmptyState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
@@ -63,9 +66,13 @@ fun ChannelsScreen(
     selection: ChannelSelectionStore = koinInject(),
     settingsStore: PlayerSettingsStore = koinInject(),
     imageLoader: ImageLoader = koinInject(),
+    htsp: HtspService = koinInject(),
+    onOpenSettings: () -> Unit = {},
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit
 ) {
     val channels by channelViewModel.channels.collectAsState()
+    val connection by htsp.state.collectAsState()
+    val emptyState = ChannelsEmptyState.resolve(channels.isNotEmpty(), connection)
     val selectedId by selection.selectedId.collectAsState()
     val playerSettings by settingsStore.playerSettings.collectAsState(initial = null)
     var didInitialRestore by remember { mutableStateOf(false) }
@@ -154,7 +161,9 @@ fun ChannelsScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        Row(Modifier.fillMaxSize()) {
+        if (emptyState != ChannelsEmptyState.NONE) {
+            EmptyChannelsPane(state = emptyState, onOpenSettings = onOpenSettings)
+        } else Row(Modifier.fillMaxSize()) {
             Surface(
                 tonalElevation = 2.dp,
                 shape = MaterialTheme.shapes.medium,

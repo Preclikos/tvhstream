@@ -1,5 +1,12 @@
 package cz.preclikos.tvhstream.ui.components
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -43,17 +50,32 @@ fun ChannelRow(
     onFocus: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    val bg = if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    else MaterialTheme.colorScheme.surface
+    // `focused` = the selected row (kept highlighted while focus is elsewhere, e.g. the
+    // side rail); hasFocus = the D-pad is actually on this row and gets a strong outline.
+    var hasFocus by remember { mutableStateOf(false) }
 
-    val leftBar = if (focused) MaterialTheme.colorScheme.primary
+    val bg = when {
+        hasFocus -> MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        focused -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        else -> MaterialTheme.colorScheme.surface
+    }
+
+    val leftBar = if (focused || hasFocus) MaterialTheme.colorScheme.primary
     else MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier
             .fillMaxWidth()
             .background(bg)
-            .onFocusChanged { if (it.isFocused) onFocus() }
+            .then(
+                if (hasFocus) Modifier.border(2.dp, MaterialTheme.colorScheme.primary)
+                else Modifier
+            )
+            .semantics(mergeDescendants = true) { role = Role.Button }
+            .onFocusChanged {
+                hasFocus = it.isFocused
+                if (it.isFocused) onFocus()
+            }
             .focusable()
             .onKeyEvent { ev ->
                 if (ev.type == KeyEventType.KeyDown &&

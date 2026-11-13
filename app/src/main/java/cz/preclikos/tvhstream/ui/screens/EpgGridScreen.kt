@@ -1,5 +1,8 @@
 package cz.preclikos.tvhstream.ui.screens
 
+import cz.preclikos.tvhstream.ui.components.EmptyChannelsPane
+import cz.preclikos.tvhstream.htsp.HtspService
+import cz.preclikos.tvhstream.core.ChannelsEmptyState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -78,10 +81,14 @@ fun EpgGridScreen(
     channelViewModel: ChannelsViewModel = koinViewModel(),
     selection: ChannelSelectionStore = koinInject(),
     repo: TvhRepository = koinInject(),
+    htsp: HtspService = koinInject(),
+    onOpenSettings: () -> Unit = {},
     onPlay: (channelId: Int, serviceId: Int, channelName: String) -> Unit
 ) {
     val selectedId by selection.selectedId.collectAsState()
     val channels by channelViewModel.channels.collectAsState()
+    val connection by htsp.state.collectAsState()
+    val emptyState = ChannelsEmptyState.resolve(channels.isNotEmpty(), connection)
 
     
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
@@ -177,6 +184,10 @@ fun EpgGridScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(Modifier.height(10.dp))
+        if (emptyState != ChannelsEmptyState.NONE) {
+            EmptyChannelsPane(state = emptyState, onOpenSettings = onOpenSettings)
+            return@Column
+        }
 
         
         Surface(

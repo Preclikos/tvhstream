@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui.player
 
+import cz.preclikos.tvhstream.ui.TvSafeArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -87,7 +88,7 @@ fun ChannelDrawer(
     Surface(
         tonalElevation = 6.dp,
         modifier = Modifier
-            .width(300.dp)
+            .width(300.dp + TvSafeArea.Horizontal)
             .fillMaxHeight()
             .focusRequester(focusRequester)
             .focusable()
@@ -104,7 +105,11 @@ fun ChannelDrawer(
     ) {
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(vertical = 10.dp),
+            contentPadding = PaddingValues(
+                start = TvSafeArea.Horizontal,
+                top = TvSafeArea.Vertical,
+                bottom = TvSafeArea.Vertical
+            ),
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)

@@ -1,5 +1,11 @@
 package cz.preclikos.tvhstream.ui.components
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.scale
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -26,21 +32,27 @@ fun RoundIconButton(
     icon: @Composable () -> Unit,
     onClick: () -> Unit,
     focusRequester: FocusRequester,
-    onFocused: () -> Unit
+    onFocused: () -> Unit,
+    contentDescription: String? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
 
-    val bg = if (focused) {
-        Color.White.copy(alpha = 0.26f)   // fokus výraznější, ale decentní
-    } else {
-        Color.White.copy(alpha = 0.14f)
-    }
+    // TV focus: inverted (opaque white, dark icon) and slightly enlarged so it is
+    // clearly visible over any video frame.
+    val bg = if (focused) Color.White else Color.White.copy(alpha = 0.14f)
+    val fg = if (focused) Color.Black else Color.White
+    val scale by animateFloatAsState(if (focused) 1.1f else 1f, label = "focusScale")
 
     Surface(
         color = Color.Transparent,
-        contentColor = Color.White,
+        contentColor = fg,
         modifier = Modifier
             .size(46.dp)
+            .scale(scale)
+            .semantics {
+                role = Role.Button
+                if (contentDescription != null) this.contentDescription = contentDescription
+            }
             .focusRequester(focusRequester)
             .onFocusChanged { st ->
                 focused = st.isFocused

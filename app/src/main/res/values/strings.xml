@@ -96,4 +96,11 @@
 
     <string name="status_channels_ready">Channels ready: %1$d</string>
     <string name="status_syncing_channels">Syncing channels\u2026 %1$d</string>
+    <string name="aspect_ratio">Aspect ratio</string>
+    <string name="empty_channels_title">No channels</string>
+    <string name="empty_channels_hint">Check the server address in Settings, or wait for the server to finish syncing.</string>
+    <string name="open_settings">Open settings</string>
+    <string name="connecting_to_server">Connecting to the server…</string>
+    <string name="playback_failed">Playback failed</string>
+    <string name="retry">Retry</string>
 </resources>

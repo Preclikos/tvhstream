@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui
 
+import androidx.compose.foundation.layout.padding
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
@@ -77,7 +78,16 @@ fun AppRoot() {
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Row(Modifier.fillMaxSize()) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .then(
+                    if (showRail) Modifier.padding(
+                        horizontal = TvSafeArea.Horizontal,
+                        vertical = TvSafeArea.Vertical
+                    ) else Modifier
+                )
+        ) {
             if (showRail) {
                 SideRail(
                     currentRoute = topRoute,
@@ -108,6 +118,9 @@ fun AppRoot() {
                     composable(Routes.CHANNELS) {
                         ContentContainer(contentFocus) {
                             ChannelsScreen(
+                                onOpenSettings = {
+                                    nav.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                },
                                 onPlay = { channelId, serviceId, name ->
                                     nav.navigate(Routes.player(channelId, serviceId, name))
                                 }
@@ -118,6 +131,9 @@ fun AppRoot() {
                     composable(Routes.EPG) {
                         ContentContainer(contentFocus) {
                             EpgGridScreen(
+                                onOpenSettings = {
+                                    nav.navigate(Routes.SETTINGS) { launchSingleTop = true }
+                                },
                                 onPlay = { channelId, serviceId, name ->
                                     nav.navigate(Routes.player(channelId, serviceId, name))
                                 }

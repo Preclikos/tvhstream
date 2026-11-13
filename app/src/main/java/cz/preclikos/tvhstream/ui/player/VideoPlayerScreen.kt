@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui.player
 
+import androidx.compose.ui.focus.focusRequester
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -103,6 +104,7 @@ fun VideoPlayerScreen(
     var drawerOpen by remember { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     val drawerFocus = remember { FocusRequester() }
+    val rootFocus = remember { FocusRequester() }
 
     val showDrawer = drawerOpen && !controlsVisible
 
@@ -234,6 +236,14 @@ fun VideoPlayerScreen(
         if (showDrawer) drawerFocus.requestFocus()
     }
 
+    // When the overlay auto-hides while one of its buttons is focused, focus would be
+    // lost with it and D-pad Left/OK would do nothing. Hand it back to the player root.
+    LaunchedEffect(controlsVisible, showDrawer) {
+        if (!controlsVisible && !showDrawer) {
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+
     LaunchedEffect(connState, screenActive) {
         if (!screenActive) return@LaunchedEffect
 
@@ -264,6 +274,7 @@ fun VideoPlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .focusRequester(rootFocus)
             .focusable()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
@@ -349,6 +360,16 @@ fun VideoPlayerScreen(
                     )
             )
         }
+        val playerStatus = rememberPlayerStatus(player)
+        PlayerStatusOverlay(
+            status = playerStatus,
+            onRetry = {
+                videoPlayerViewModel.stop()
+                videoPlayerViewModel.playService(ctx, currentServiceId, currentChannelName)
+                lastPlayedServiceId = currentServiceId
+            },
+        )
+
         AnimatedVisibility(
             visible = showDrawer,
             enter = slideInHorizontally(tween(180)) { -it },

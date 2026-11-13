@@ -81,4 +81,11 @@
     <string name="status_epg_warmup_batch">Programmdaten: %1$d/%2$d geladen (%3$d/%4$d aktualisiert)</string>
     <string name="status_channels_ready">Sender verfügbar: %1$d</string>
     <string name="status_syncing_channels">Sender werden synchronisiert… %1$d</string>
+    <string name="aspect_ratio">Seitenverhältnis</string>
+    <string name="empty_channels_title">Keine Sender</string>
+    <string name="empty_channels_hint">Prüfen Sie die Serveradresse in den Einstellungen oder warten Sie, bis der Server synchronisiert ist.</string>
+    <string name="open_settings">Einstellungen öffnen</string>
+    <string name="connecting_to_server">Verbindung zum Server…</string>
+    <string name="playback_failed">Wiedergabe fehlgeschlagen</string>
+    <string name="retry">Erneut versuchen</string>
 </resources>

@@ -93,4 +93,11 @@
 
     <string name="status_channels_ready">Kanály připraveny: %1$d</string>
     <string name="status_syncing_channels">Načítám kanály\u2026 %1$d</string>
+    <string name="aspect_ratio">Poměr stran</string>
+    <string name="empty_channels_title">Žádné kanály</string>
+    <string name="empty_channels_hint">Zkontrolujte adresu serveru v Nastavení, nebo počkejte, než server dokončí synchronizaci.</string>
+    <string name="open_settings">Otevřít nastavení</string>
+    <string name="connecting_to_server">Připojování k serveru…</string>
+    <string name="playback_failed">Přehrávání selhalo</string>
+    <string name="retry">Zkusit znovu</string>
 </resources>

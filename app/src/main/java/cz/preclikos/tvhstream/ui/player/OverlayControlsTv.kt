@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui.player
 
+import cz.preclikos.tvhstream.ui.TvSafeArea
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +107,7 @@ fun OverlayControlsTv(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .background(topGradient)
-                .padding(horizontal = 18.dp, vertical = 14.dp)
+                .padding(horizontal = TvSafeArea.Horizontal, vertical = TvSafeArea.Vertical)
         ) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -163,7 +164,7 @@ fun OverlayControlsTv(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(bottomGradient)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = TvSafeArea.Horizontal, vertical = TvSafeArea.Vertical)
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -241,7 +242,7 @@ fun OverlayControlsTv(
                             RoundIconButton(
                                 icon = {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Canvas(modifier = Modifier.size(28.dp)) {
+                                        Canvas(modifier = Modifier.size(38.dp)) {
                                             val strokeWidth = 2.5f
                                             val cap = StrokeCap.Round
                                             val color = Color.White
@@ -311,11 +312,12 @@ fun OverlayControlsTv(
                                                 AspectRatioMode.FORCE_4_3 -> "4:3"
                                             },
                                             color = Color.White,
-                                            fontSize = 7.sp,
+                                            fontSize = 12.sp, // TV minimum readable size
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
                                 },
+                                contentDescription = stringResource(R.string.aspect_ratio),
                                 onClick = { onUserInteraction(); onAspectRatioChange() },
                                 focusRequester = aspectFR,
                                 onFocused = { lastFocused = 3 }
