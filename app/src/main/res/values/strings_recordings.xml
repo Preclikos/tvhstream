@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="navigation_recordings">Recordings</string>
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_empty">No recordings</string>
+    <string name="recordings_in_progress">● Recording</string>
+    <string name="recordings_duration_min">%d min</string>
+    <string name="recordings_not_found">Recording not found</string>
+    <string name="recordings_play_failed">Can\'t play this recording</string>
+</resources>

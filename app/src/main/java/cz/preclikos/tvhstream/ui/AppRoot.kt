@@ -4,6 +4,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
+import cz.preclikos.tvhstream.ui.recordings.RecordingsScreen
+import cz.preclikos.tvhstream.ui.recordings.RecordingPlayerScreen
 import cz.preclikos.tvhstream.ui.components.CertificateTrustDialog
 import androidx.compose.foundation.layout.padding
 import android.app.Activity
@@ -42,6 +44,9 @@ object Routes {
     const val EPG = "epg"
     const val SETTINGS = "settings"
     const val PLAYER = "player"
+    const val RECORDINGS = "recordings"
+    const val RECORDING = "recording"
+    fun recording(id: Int) = "recording/$id"
     fun player(channelId: Int, serviceId: Int, channelName: String) =
         "player/$channelId/$serviceId/${android.net.Uri.encode(channelName)}"
 }
@@ -60,7 +65,7 @@ fun AppRoot() {
     val contentFocus = remember { FocusRequester() }
     val currentRoute = backStackEntry?.destination?.route
     val topRoute = currentRoute?.substringBefore("/")
-    val showRail = topRoute != Routes.PLAYER
+    val showRail = topRoute != Routes.PLAYER && topRoute != Routes.RECORDING
 
     val isPlayer = currentRoute?.startsWith(Routes.PLAYER) == true
 
@@ -152,6 +157,19 @@ fun AppRoot() {
                                 }
                             )
                         }
+                    }
+
+                    composable(Routes.RECORDINGS) {
+                        ContentContainer(contentFocus) {
+                            RecordingsScreen(onPlay = { nav.navigate(Routes.recording(it.id)) })
+                        }
+                    }
+
+                    composable(
+                        route = "${Routes.RECORDING}/{id}",
+                        arguments = listOf(navArgument("id") { type = NavType.IntType }),
+                    ) { entry ->
+                        RecordingPlayerScreen(recordingId = entry.arguments?.getInt("id") ?: -1)
                     }
 
                     composable(Routes.SETTINGS) {

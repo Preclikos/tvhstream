@@ -48,6 +48,9 @@ class HtspService(
     companion object {
         /** See [muxEvents]; guarded by a unit test so it isn't raised back (OOM). */
         internal const val MUX_EVENT_BUFFER_CAPACITY = 512
+
+        /** HTSP_DVR_PLAYCOUNT_KEEP (tvheadend src/htsp_server.h). */
+        private const val PLAYCOUNT_KEEP = Int.MAX_VALUE - 1
     }
 
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
@@ -307,14 +310,50 @@ class HtspService(
         return msg.bin("data") ?: ByteArray(0) // EOF => empty
     }
 
-    suspend fun fileClose(id: Int, timeoutMs: Long = 5_000) {
+    /**
+     * @param keepPlaycount don't let the server bump the recording's play count
+     * (playcount = HTSP_DVR_PLAYCOUNT_KEEP; by default every fileClose increments it).
+     */
+    suspend fun fileClose(id: Int, timeoutMs: Long = 5_000, keepPlaycount: Boolean = false) {
         request(
             method = "fileClose",
-            fields = mapOf("id" to id),
+            fields = if (keepPlaycount) mapOf("id" to id, "playcount" to PLAYCOUNT_KEEP)
+            else mapOf("id" to id),
             timeoutMs = timeoutMs,
             flush = true,
             disconnectOnTimeout = false
         )
+    }
+
+    /**
+     * fileOpen that also returns the file size (htsp_file_open replies with "id",
+     * "size" and "mtime"). Used for recordings: "/dvr/<dvrEntryId>".
+     */
+    suspend fun fileOpenWithSize(path: String, timeoutMs: Long = 5_000): Pair<Int, Long?> {
+        val p = if (path.startsWith("/")) path else "/$path"
+        val msg = request(
+            method = "fileOpen",
+            fields = mapOf("file" to p),
+            timeoutMs = timeoutMs,
+            flush = true,
+            disconnectOnTimeout = false
+        )
+        msg.str("error")?.let { throw java.io.IOException("fileOpen $p: $it") }
+        val id = msg.int("id") ?: throw java.io.IOException("fileOpen $p: missing id")
+        return id to msg.long("size")
+    }
+
+    /** Absolute seek (SEEK_SET); returns the new offset reported by the server. */
+    suspend fun fileSeek(id: Int, offset: Long, timeoutMs: Long = 5_000): Long {
+        val msg = request(
+            method = "fileSeek",
+            fields = mapOf("id" to id, "offset" to offset, "whence" to "SEEK_SET"),
+            timeoutMs = timeoutMs,
+            flush = true,
+            disconnectOnTimeout = false
+        )
+        msg.str("error")?.let { throw java.io.IOException("fileSeek: $it") }
+        return msg.long("offset") ?: offset
     }
 
     suspend fun disconnect() {

@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui.components
 
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
@@ -69,7 +70,8 @@ fun SideRail(
     val channelsLabel = stringResource(R.string.navigation_channels)
     val epgLabel = stringResource(R.string.navigation_epg)
     val settingsLabel = stringResource(R.string.navigation_settings)
-    val items = remember(channelsLabel, epgLabel, settingsLabel) {
+    val recordingsLabel = stringResource(R.string.navigation_recordings)
+    val items = remember(channelsLabel, epgLabel, recordingsLabel, settingsLabel) {
         listOf(
             RailItem(Routes.CHANNELS, channelsLabel) {
                 Icon(
@@ -79,6 +81,9 @@ fun SideRail(
                 )
             },
             RailItem(Routes.EPG, epgLabel) { Icon(Icons.Filled.Event, null, tint = Color.White) },
+            RailItem(Routes.RECORDINGS, recordingsLabel) {
+                Icon(Icons.Filled.VideoLibrary, null, tint = Color.White)
+            },
             RailItem(Routes.SETTINGS, settingsLabel) {
                 Icon(
                     Icons.Filled.Settings,
