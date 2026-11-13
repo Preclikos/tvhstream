@@ -119,7 +119,6 @@ fun ChannelDrawer(
 
                 ChannelRow(
                     modifier = if (isSelected) Modifier.focusRequester(selectedRowFocus) else Modifier,
-                    number = index + 1,
                     name = ch.name,
                     programTitle = now?.title ?: stringResource(R.string.no_epg),
                     progress = if (now != null) prog else null,

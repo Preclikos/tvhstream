@@ -52,7 +52,8 @@ fun channelProgrammeLine(programStart: String?, programTitle: String): String =
 @Composable
 fun ChannelRow(
     modifier: Modifier = Modifier,
-    number: Int,
+    /** Extra number prefix; null when [name] already carries the TVH channel number. */
+    number: Int? = null,
     name: String,
     programTitle: String,
     progress: Float?,
@@ -127,7 +128,7 @@ fun ChannelRow(
 
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "$number  $name",
+                    text = if (number != null) "$number  $name" else name,
                     style = MaterialTheme.typography.titleSmall,
                     color = titleColor,
                     maxLines = 1,
