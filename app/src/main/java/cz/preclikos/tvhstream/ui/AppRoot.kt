@@ -1,5 +1,9 @@
 package cz.preclikos.tvhstream.ui
 
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import cz.preclikos.tvhstream.ui.components.CertificateTrustDialog
 import androidx.compose.foundation.layout.padding
 import android.app.Activity
@@ -116,6 +120,12 @@ fun AppRoot() {
                 NavHost(
                     navController = nav,
                     startDestination = Routes.CHANNELS,
+                    // Short linear crossfade: rail navigation feels instant on TV
+                    // (the Navigation default is a ~700 ms fade).
+                    enterTransition = { fadeIn(tween(NAV_FADE_MS, easing = LinearEasing)) },
+                    exitTransition = { fadeOut(tween(NAV_FADE_MS, easing = LinearEasing)) },
+                    popEnterTransition = { fadeIn(tween(NAV_FADE_MS, easing = LinearEasing)) },
+                    popExitTransition = { fadeOut(tween(NAV_FADE_MS, easing = LinearEasing)) },
                 ) {
 
                     composable(Routes.CHANNELS) {
@@ -176,3 +186,5 @@ fun AppRoot() {
         }
     }
 }
+
+private const val NAV_FADE_MS = 150

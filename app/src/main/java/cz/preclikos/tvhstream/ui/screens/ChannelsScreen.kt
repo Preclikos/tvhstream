@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui.screens
 
+import androidx.compose.foundation.layout.Arrangement
 import cz.preclikos.tvhstream.ui.components.EmptyChannelsPane
 import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.core.ChannelsEmptyState
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -173,7 +173,8 @@ fun ChannelsScreen(
             ) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(vertical = 8.dp),
+                    contentPadding = PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
                         .focusGroup()
                         .focusRestorer()
@@ -190,6 +191,7 @@ fun ChannelsScreen(
                             name = ch.name,
                             programTitle = now?.title ?: stringResource(R.string.no_epg),
                             progress = if (now != null) prog else null,
+                            programStart = now?.let { formatHm(it.start) },
                             imageLoader = imageLoader,
                             piconPath = ch.icon,
                             focused = isSelected,
@@ -197,11 +199,6 @@ fun ChannelsScreen(
                                 if (!isRestoring) selection.setSelected(ch.id)
                             },
                             onConfirm = { onPlay(ch.id, ch.id, ch.name) }
-                        )
-
-                        HorizontalDivider(
-                            thickness = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                         )
                     }
                 }
