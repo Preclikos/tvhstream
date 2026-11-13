@@ -156,7 +156,7 @@ fun VideoPlayerScreen(
         if (lastPlayedServiceId != -1) {
             videoPlayerViewModel.stop()
         }
-        videoPlayerViewModel.playService(ctx, currentServiceId)
+        videoPlayerViewModel.playService(ctx, currentServiceId, currentChannelName)
         settingsStore.setLastPlayedChannel(currentChannelId)
         lastPlayedServiceId = currentServiceId
     }
@@ -226,6 +226,10 @@ fun VideoPlayerScreen(
         if (controlsVisible) drawerOpen = false
     }
 
+    LaunchedEffect(currentChannelName, nowEvent?.title) {
+        videoPlayerViewModel.updateNowPlaying(currentChannelName, nowEvent?.title)
+    }
+
     LaunchedEffect(showDrawer) {
         if (showDrawer) drawerFocus.requestFocus()
     }
@@ -239,7 +243,7 @@ fun VideoPlayerScreen(
                     connectionLost = false
                     showControls()
 
-                    videoPlayerViewModel.playService(ctx, currentServiceId)
+                    videoPlayerViewModel.playService(ctx, currentServiceId, currentChannelName)
                     lastPlayedServiceId = currentServiceId
                 }
             }

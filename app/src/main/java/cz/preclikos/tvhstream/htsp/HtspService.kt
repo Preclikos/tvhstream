@@ -28,6 +28,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.security.MessageDigest
+import cz.preclikos.tvhstream.core.drainEach
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.min
@@ -43,6 +44,11 @@ sealed class ConnectionState {
 class HtspService(
     ioDispatcher: CoroutineDispatcher
 ) {
+    companion object {
+        /** See [muxEvents]; guarded by a unit test so it isn't raised back (OOM). */
+        internal const val MUX_EVENT_BUFFER_CAPACITY = 512
+    }
+
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val state: StateFlow<ConnectionState> = _state
 
@@ -56,7 +62,7 @@ class HtspService(
     // them could reach hundreds of MB and OOM'd 128 MB-heap TVs while the player
     // wasn't draining. 512 is plenty to absorb bursts from the reader loop.
     private val _muxEvents = MutableSharedFlow<HtspMessage>(
-        extraBufferCapacity = 512,
+        extraBufferCapacity = MUX_EVENT_BUFFER_CAPACITY,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val muxEvents: SharedFlow<HtspMessage> = _muxEvents
@@ -364,15 +370,9 @@ class HtspService(
                 s?.isConnected == true && !s.isClosed
     }
 
-    /**
-     * Fails every in-flight request. Drains by key instead of `pending.values.toList()`:
-     * Kotlin's toList() reads size() and then iterator().next(), which throws
-     * NoSuchElementException if the reader loop removes the entry in between.
-     */
+    /** Fails every in-flight request (race-safe, see [drainEach]). */
     private fun failPending(t: Throwable) {
-        for (seq in pending.keys) {
-            pending.remove(seq)?.def?.completeExceptionally(t)
-        }
+        pending.drainEach { it.def.completeExceptionally(t) }
     }
 
     private suspend fun disconnectInternal(t: Throwable) {

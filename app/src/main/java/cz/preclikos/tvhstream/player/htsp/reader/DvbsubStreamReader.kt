@@ -1,6 +1,7 @@
 package cz.preclikos.tvhstream.player.htsp.reader
 
 import androidx.annotation.OptIn
+import androidx.annotation.VisibleForTesting
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
@@ -33,4 +34,8 @@ internal class DvbsubStreamReader : PlainStreamReader(C.TRACK_TYPE_TEXT) {
 
     override val trackType: Int
         get() = C.TRACK_TYPE_TEXT
+
+    @VisibleForTesting
+    internal fun formatForTest(streamIndex: Int, stream: HtspMessage): Format =
+        buildFormat(streamIndex, stream)
 }

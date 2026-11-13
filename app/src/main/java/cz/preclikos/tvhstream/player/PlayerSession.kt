@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -12,6 +14,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.util.EventLogger
+import androidx.media3.session.MediaSession
+import cz.preclikos.tvhstream.core.LivePausePolicy
 import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.player.htsp.HtspSubscriptionDataSource
 import cz.preclikos.tvhstream.player.htsp.LegacyRenderer
@@ -45,12 +49,22 @@ class PlayerSession(
 
     private var watchdogJob: Job? = null
 
+    // MediaSession: remote Play/Pause/Stop keys, Assistant and the system "now playing".
+    private var mediaSession: MediaSession? = null
+    private var appContext: Context? = null
+    private var currentServiceId: Int? = null
+    private var pausedAtMs: Long? = null
+
+    /** Exposed for tests. */
+    internal val sessionPlayer: Player? get() = mediaSession?.player
+
     private companion object {
         // If playback is still BUFFERING with the position not advancing this long
         // after start, a renderer (typically an audio track the hardware decoder can't
         // actually play) is blocking; drop audio so the video plays instead of freezing.
         const val STUCK_TIMEOUT_MS = 6_000L
         const val STUCK_POS_MS = 1_000L
+        const val SESSION_ID = "tvhstream-live"
     }
 
     @OptIn(UnstableApi::class)
@@ -79,6 +93,10 @@ class PlayerSession(
             .also { p ->
                 p.addAnalyticsListener(EventLogger())
                 player = p
+                appContext = context.applicationContext
+                mediaSession = MediaSession.Builder(context, LivePlayer(p))
+                    .setId(SESSION_ID)
+                    .build()
 
                 p.playWhenReady = playWhenReadyState
                 p.seekTo(currentItem, playbackPosition)
@@ -86,9 +104,11 @@ class PlayerSession(
     }
 
     @OptIn(UnstableApi::class)
-    fun playService(context: Context, serviceId: Int) {
+    fun playService(context: Context, serviceId: Int, channelName: String? = null) {
         subscriptionId = null
         watchdogJob?.cancel()
+        currentServiceId = serviceId
+        pausedAtMs = null
 
         mainScope.launch {
             val p = getOrCreatePlayer(context)
@@ -117,7 +137,12 @@ class PlayerSession(
             val mediaSource = ProgressiveMediaSource.Factory(
                 factory,
                 TvheadendExtractorsFactory()
-            ).createMediaSource(MediaItem.fromUri("htsp://service/$serviceId"))
+            ).createMediaSource(
+                MediaItem.Builder()
+                    .setUri("htsp://service/$serviceId")
+                    .setMediaMetadata(nowPlayingMetadata(channelName, programme = null))
+                    .build()
+            )
 
             p.setMediaSource(mediaSource)
             p.prepare()
@@ -168,8 +193,26 @@ class PlayerSession(
         unsubscribe()
     }
 
+    /** Updates what the system shows as "now playing" (channel + current programme). */
+    fun updateNowPlaying(channelName: String, programme: String?) {
+        mainScope.launch {
+            val p = player ?: return@launch
+            if (p.mediaItemCount == 0) return@launch
+            val item = p.getMediaItemAt(0)
+            val metadata = nowPlayingMetadata(channelName, programme)
+            if (item.mediaMetadata == metadata) return@launch
+            // Same URI, so ProgressiveMediaSource updates the item in place (no re-buffer).
+            p.replaceMediaItem(0, item.buildUpon().setMediaMetadata(metadata).build())
+        }
+    }
+
     fun release() {
         watchdogJob?.cancel()
+        currentServiceId = null
+        pausedAtMs = null
+        // Released synchronously: a new session with the same id may be built right after.
+        mediaSession?.release()
+        mediaSession = null
         mainScope.launch {
             player?.let { p ->
                 updateState(p)
@@ -187,6 +230,48 @@ class PlayerSession(
             withContext(Dispatchers.IO)
             {
                 factory.releaseCurrentDataSource()
+            }
+        }
+    }
+
+    private fun nowPlayingMetadata(channelName: String?, programme: String?): MediaMetadata =
+        MediaMetadata.Builder()
+            .setTitle(programme ?: channelName)
+            .setArtist(if (programme != null) channelName else null)
+            .setStation(channelName)
+            .setIsPlayable(true)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_TV_CHANNEL)
+            .build()
+
+    /**
+     * Live-TV semantics for the session's play/pause (remote keys, Assistant): pause
+     * freezes the picture; resuming after a short pause continues from the buffer, after
+     * a longer one it re-tunes the channel so the viewer is back at live.
+     */
+    private inner class LivePlayer(private val exo: ExoPlayer) : ForwardingPlayer(exo) {
+        override fun pause() {
+            if (pausedAtMs == null) pausedAtMs = System.currentTimeMillis()
+            super.pause()
+        }
+
+        override fun play() {
+            resume { super.play() }
+        }
+
+        override fun setPlayWhenReady(playWhenReady: Boolean) {
+            if (playWhenReady) resume { super.setPlayWhenReady(true) } else pause()
+        }
+
+        private inline fun resume(fromBuffer: () -> Unit) {
+            val retune = LivePausePolicy.shouldRetuneOnResume(pausedAtMs, System.currentTimeMillis())
+            pausedAtMs = null
+            val ctx = appContext
+            val serviceId = currentServiceId
+            if (retune && ctx != null && serviceId != null) {
+                unsubscribe()
+                playService(ctx, serviceId, exo.mediaMetadata.station?.toString())
+            } else {
+                fromBuffer()
             }
         }
     }

@@ -2,6 +2,8 @@ package cz.preclikos.tvhstream.ui.components
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import coil3.ImageLoader
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -28,6 +30,8 @@ class ChannelRowTest {
                     name = "ČT1 HD",
                     programTitle = "Večerní zprávy",
                     progress = 0.5f,
+                    imageLoader = ImageLoader(LocalContext.current),
+                    piconPath = null,
                     focused = false,
                     onFocus = {},
                     onConfirm = { confirmed = true }

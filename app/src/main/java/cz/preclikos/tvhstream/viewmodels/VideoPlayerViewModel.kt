@@ -16,12 +16,23 @@ class VideoPlayerViewModel(
     fun getPlayerInstance(context: Context) =
         playerSession.getOrCreatePlayer(context)
 
-    fun playService(context: Context, serviceId: Int) {
-        playerSession.playService(context, serviceId)
+    fun playService(context: Context, serviceId: Int, channelName: String? = null) {
+        playerSession.playService(context, serviceId, channelName)
+    }
+
+    fun updateNowPlaying(channelName: String, programme: String?) {
+        playerSession.updateNowPlaying(channelName, programme)
     }
 
     fun stop() {
         playerSession.stop()
+    }
+
+    override fun onCleared() {
+        // Leaving the player screen: free the decoders and the MediaSession; the next
+        // player screen builds a fresh ExoPlayer.
+        playerSession.release()
+        super.onCleared()
     }
 
     fun epgForChannel(channelId: Int) = repo.epgForChannel(channelId)
