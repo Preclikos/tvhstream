@@ -477,6 +477,6 @@ class HtspSubscriptionDataSource private constructor(
 
         // Safety cap on muxpkts buffered while waiting for subscriptionStart (normally
         // only a handful arrive before it); drop oldest beyond this to bound memory.
-        private const val MAX_PENDING_MUX = 4096
+        private const val MAX_PENDING_MUX = 256
     }
 }

@@ -51,8 +51,12 @@ class HtspService(
     private val controlEventStream = HtspEventStream()
     val controlEvents: SharedFlow<HtspEvent> = controlEventStream.events
 
+    // Only a hand-off to the data source's 10 MB ring buffer, which is the real
+    // jitter buffer. Each muxpkt holds a whole video frame (tens of KB), so 8192 of
+    // them could reach hundreds of MB and OOM'd 128 MB-heap TVs while the player
+    // wasn't draining. 512 is plenty to absorb bursts from the reader loop.
     private val _muxEvents = MutableSharedFlow<HtspMessage>(
-        extraBufferCapacity = 8192,
+        extraBufferCapacity = 512,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val muxEvents: SharedFlow<HtspMessage> = _muxEvents

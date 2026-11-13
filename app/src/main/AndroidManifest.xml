@@ -20,6 +20,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.TVHStream"
         android:name=".App"
+        android:largeHeap="true"
         android:usesCleartextTraffic="true">
 
         <service
