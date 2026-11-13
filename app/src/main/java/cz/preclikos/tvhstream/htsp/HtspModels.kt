@@ -90,7 +90,9 @@ sealed interface HtspEvent {
 data class ChannelUi(
     val id: Int,
     val name: String,
-    val icon: String?
+    val icon: String?,
+    /** TVHeadend channel number (may be non-contiguous), for typing it on the remote. */
+    val number: Int? = null,
 )
 
 data class EpgEventEntry(

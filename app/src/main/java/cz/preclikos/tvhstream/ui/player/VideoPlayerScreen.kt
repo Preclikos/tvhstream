@@ -44,7 +44,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil3.ImageLoader
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import cz.preclikos.tvhstream.core.ChannelNavigation
+import cz.preclikos.tvhstream.core.ChannelNumberEntry
 import cz.preclikos.tvhstream.htsp.ChannelUi
 import cz.preclikos.tvhstream.htsp.ConnectionState
 import cz.preclikos.tvhstream.settings.AspectRatioMode
@@ -207,6 +210,21 @@ fun VideoPlayerScreen(
         hideControls()
     }
 
+    // Typing a channel number on the remote (#15): tune after a pause, or on OK.
+    var numberEntry by remember { mutableStateOf(ChannelNumberEntry()) }
+
+    fun commitNumberEntry() {
+        val target = numberEntry.findChannel(channels)
+        numberEntry = ChannelNumberEntry()
+        if (target != null && target.id != currentChannelId) tuneChannel(target)
+    }
+
+    LaunchedEffect(numberEntry) {
+        if (!numberEntry.isActive) return@LaunchedEffect
+        delay(ChannelNumberEntry.COMMIT_DELAY_MS)
+        commitNumberEntry()
+    }
+
     val epg by videoPlayerViewModel.epgForChannel(currentChannelId).collectAsState()
 
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
@@ -279,6 +297,27 @@ fun VideoPlayerScreen(
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+
+                ChannelNumberEntry.digitForKeyCode(event.nativeKeyEvent.keyCode)?.let { digit ->
+                    numberEntry = numberEntry.append(digit)
+                    return@onPreviewKeyEvent true
+                }
+
+                if (numberEntry.isActive) {
+                    when (event.key) {
+                        Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
+                            commitNumberEntry()
+                            return@onPreviewKeyEvent true
+                        }
+
+                        Key.Back -> {
+                            numberEntry = ChannelNumberEntry()
+                            return@onPreviewKeyEvent true
+                        }
+
+                        else -> Unit
+                    }
+                }
 
                 ChannelNavigation.directionForKeyCode(event.nativeKeyEvent.keyCode)?.let { direction ->
                     return@onPreviewKeyEvent tuneAdjacentChannel(direction)
@@ -369,6 +408,16 @@ fun VideoPlayerScreen(
                 lastPlayedServiceId = currentServiceId
             },
         )
+
+        if (numberEntry.isActive) {
+            ChannelNumberBadge(
+                digits = numberEntry.digits,
+                channelName = numberEntry.findChannel(channels)?.name,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 32.dp)
+            )
+        }
 
         AnimatedVisibility(
             visible = showDrawer,
