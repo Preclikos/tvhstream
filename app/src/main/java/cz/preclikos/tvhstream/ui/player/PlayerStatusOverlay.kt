@@ -29,22 +29,43 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import cz.preclikos.tvhstream.R
+import cz.preclikos.tvhstream.core.PlayerInfoFormat
+import kotlinx.coroutines.delay
 
 /** Buffering / error state of the player, observed from ExoPlayer callbacks. */
 data class PlayerStatus(val buffering: Boolean, val error: PlaybackException?)
 
+/**
+ * [PlayerStatus.buffering] turns on only after the player has been buffering for a
+ * moment (500 ms while tuning, 1 s when rebuffering), so short blips during a zap
+ * don't flash a spinner. Errors show immediately.
+ */
 @Composable
 fun rememberPlayerStatus(player: Player): PlayerStatus {
     var buffering by remember { mutableStateOf(player.playbackState == Player.STATE_BUFFERING) }
+    var hasBeenReady by remember { mutableStateOf(player.playbackState == Player.STATE_READY) }
+    var showBusy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf(player.playerError) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 buffering = playbackState == Player.STATE_BUFFERING
-                if (playbackState == Player.STATE_READY) error = null
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        hasBeenReady = true
+                        error = null
+                    }
+                    // New channel / stopped: the next buffering is a tune again.
+                    Player.STATE_IDLE -> hasBeenReady = false
+                }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                hasBeenReady = false
             }
 
             override fun onPlayerErrorChanged(e: PlaybackException?) {
@@ -54,7 +75,15 @@ fun rememberPlayerStatus(player: Player): PlayerStatus {
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    return PlayerStatus(buffering, error)
+    LaunchedEffect(buffering) {
+        if (buffering) {
+            delay(PlayerInfoFormat.busyDelayMs(hasBeenReady))
+            showBusy = true
+        } else {
+            showBusy = false
+        }
+    }
+    return PlayerStatus(showBusy, error)
 }
 
 /**

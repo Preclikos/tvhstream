@@ -46,8 +46,9 @@ import coil3.ImageLoader
 import cz.preclikos.tvhstream.R
 import cz.preclikos.tvhstream.htsp.EpgEventEntry
 import cz.preclikos.tvhstream.settings.AspectRatioMode
+import androidx.compose.ui.platform.testTag
+import cz.preclikos.tvhstream.core.PlayerInfoFormat
 import cz.preclikos.tvhstream.ui.common.formatClock
-import cz.preclikos.tvhstream.ui.common.formatHms
 import cz.preclikos.tvhstream.ui.common.progress
 import cz.preclikos.tvhstream.ui.components.RoundIconButton
 import cz.preclikos.tvhstream.ui.components.PiconBox
@@ -85,16 +86,12 @@ fun OverlayControlsTv(
     }
 
     val clock = remember(nowSec) { formatClock(nowSec) }
-    val endsAt = remember(nowEvent) { nowEvent?.let { formatClock(it.stop) } ?: "" }
-    val progress = remember(nowEvent, nowSec) { nowEvent?.progress(nowSec) ?: 0f }
-
-    val centerTimeText = remember(nowEvent, nowSec) {
-        nowEvent?.let { event ->
-            val elapsed = (nowSec - event.start).coerceAtLeast(0L)
-            val total = (event.stop - event.start).coerceAtLeast(1L)
-            "${formatHms(elapsed)} / ${formatHms(total)}"
-        } ?: "—"
+    val startClock = remember(nowEvent) { nowEvent?.let { formatClock(it.start) }.orEmpty() }
+    val endClock = remember(nowEvent) { nowEvent?.let { formatClock(it.stop) }.orEmpty() }
+    val minutesLeft = remember(nowEvent, nowSec) {
+        nowEvent?.let { PlayerInfoFormat.minutesLeft(nowSec, it.stop) }
     }
+    val progress = remember(nowEvent, nowSec) { nowEvent?.progress(nowSec) ?: 0f }
 
     val title = remember(nowEvent, channelName) { nowEvent?.title ?: channelName }
     val summary = remember(nowEvent) { nowEvent?.summary?.trim().orEmpty() }
@@ -125,6 +122,21 @@ fun OverlayControlsTv(
                 Spacer(Modifier.width(14.dp))
 
                 Column(Modifier.weight(1f)) {
+                    // "20:00 – 21:00 • 45 min left" above the title.
+                    if (minutesLeft != null) {
+                        Text(
+                            text = stringResource(
+                                R.string.player_time_left,
+                                startClock,
+                                endClock,
+                                minutesLeft.toInt()
+                            ),
+                            color = Color.White.copy(alpha = 0.80f),
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            modifier = Modifier.testTag("playerTimeLeft")
+                        )
+                    }
                     Text(
                         text = title,
                         color = Color.White,
@@ -143,18 +155,7 @@ fun OverlayControlsTv(
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(clock, color = Color.White, style = MaterialTheme.typography.titleLarge)
-                    if (endsAt.isNotEmpty()) {
-                        Text(
-                            text = stringResource(
-                                id = R.string.player_ends_in, endsAt
-                            ),
-                            color = Color.White.copy(alpha = 0.90f),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
+                Text(clock, color = Color.White, style = MaterialTheme.typography.titleLarge)
             }
         }
 
@@ -169,24 +170,38 @@ fun OverlayControlsTv(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Progress + čas
-                Text(
-                    text = centerTimeText,
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.22f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                )
+                // Start clock | progress | end clock
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (startClock.isNotEmpty()) {
+                        Text(
+                            startClock,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.testTag("playerStartClock")
+                        )
+                        Spacer(Modifier.width(12.dp))
+                    }
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.22f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                    )
+                    if (endClock.isNotEmpty()) {
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            endClock,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.testTag("playerEndClock")
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(8.dp))
 
@@ -195,16 +210,8 @@ fun OverlayControlsTv(
                     contentAlignment = Alignment.Center
                 ) {
                     if (nextEvent != null) {
-                        val nextRange = remember(nextEvent) { nextEvent.timeRangeText() ?: "" }
-                        val text = if (nextRange.isNotEmpty()) {
-                            stringResource(
-                                R.string.player_next_event_with_range,
-                                nextEvent.title,
-                                nextRange
-                            )
-                        } else {
-                            stringResource(R.string.player_next_event, nextEvent.title)
-                        }
+                        val nextStart = remember(nextEvent) { formatClock(nextEvent.start) }
+                        val text = stringResource(R.string.player_next_short, nextStart, nextEvent.title)
                         Text(
                             text = text,
                             color = Color.White.copy(alpha = 0.80f),
@@ -353,11 +360,4 @@ fun OverlayControlsTv(
 
     if (showAudio) AudioTrackDialog(player = player, onDismiss = { showAudio = false })
     if (showSubs) SubtitleTrackDialog(player = player, onDismiss = { showSubs = false })
-}
-
-
-private fun EpgEventEntry.timeRangeText(): String? {
-    val s = formatClock(start)
-    val e = formatClock(stop)
-    return "$s–$e"
 }
