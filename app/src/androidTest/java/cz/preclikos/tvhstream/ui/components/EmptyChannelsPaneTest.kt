@@ -23,7 +23,7 @@ class EmptyChannelsPaneTest {
     @Test
     fun loading_showsProgress_withoutSettingsButton() {
         rule.setContent {
-            MaterialTheme { EmptyChannelsPane(ChannelsEmptyState.LOADING, onOpenSettings = {}) }
+            MaterialTheme { EmptyChannelsPane(ChannelsEmptyState.LOADING, onOpenSettings = {}, connectionProblem = null) }
         }
         rule.onNodeWithTag("emptyLoading").assertIsDisplayed()
         rule.onNodeWithTag("openSettings").assertDoesNotExist()
@@ -33,7 +33,7 @@ class EmptyChannelsPaneTest {
     fun noChannels_focusesOpenSettings_andNavigates() {
         var opened = false
         rule.setContent {
-            MaterialTheme { EmptyChannelsPane(ChannelsEmptyState.NO_CHANNELS, onOpenSettings = { opened = true }) }
+            MaterialTheme { EmptyChannelsPane(ChannelsEmptyState.NO_CHANNELS, onOpenSettings = { opened = true }, connectionProblem = null) }
         }
         rule.onNodeWithTag("openSettings").assertIsDisplayed().assertIsFocused()
         rule.onNodeWithTag("openSettings").performClick()
