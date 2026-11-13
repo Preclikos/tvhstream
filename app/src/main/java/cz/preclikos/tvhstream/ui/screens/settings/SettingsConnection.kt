@@ -1,5 +1,17 @@
 package cz.preclikos.tvhstream.ui.screens.settings
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
+import androidx.compose.material3.Switch
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.background
+import cz.preclikos.tvhstream.core.HtspTls
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,13 +58,22 @@ fun SettingsConnection(
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
     var auto by rememberSaveable { mutableStateOf(true) }
+    var tls by rememberSaveable { mutableStateOf(false) }
+    var fingerprint by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         val s = settingsStore.serverSettings.first()
         host = s.host
         htspPort = s.htspPort.toString()
         user = s.username
+        tls = s.tls
+        fingerprint = s.tlsFingerprint
         pass = passwordStore.getPassword()
+    }
+
+    // The fingerprint is pinned from the trust dialog while this screen may be open.
+    LaunchedEffect(Unit) {
+        settingsStore.serverSettings.collect { s -> fingerprint = s.tlsFingerprint }
     }
 
     Column(
@@ -113,18 +134,80 @@ fun SettingsConnection(
             )
 
             Spacer(Modifier.height(12.dp))
+
+            TlsSwitchRow(
+                checked = tls,
+                onCheckedChange = { enabled ->
+                    tls = enabled
+                    htspPort = HtspTls.portForToggle(htspPort.toIntOrNull(), enabled).toString()
+                },
+            )
+
+            if (tls) {
+                Spacer(Modifier.height(12.dp))
+                TvOutlinedTextField(
+                    id = "fingerprint",
+                    editingId = editingId,
+                    setEditingId = { editingId = it },
+                    value = fingerprint,
+                    onValueChange = { fingerprint = it },
+                    label = { Text(stringResource(R.string.tls_fingerprint)) }
+                )
+                Text(
+                    stringResource(R.string.tls_fingerprint_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 val pHtsp = htspPort.toIntOrNull() ?: 9982
                 scope.launch {
-                    settingsStore.saveServer(host, pHtsp, user, auto)
+                    settingsStore.saveServer(
+                        host, pHtsp, user, auto,
+                        tls = tls,
+                        tlsFingerprint = HtspTls.normalize(fingerprint)?.let(HtspTls::format).orEmpty(),
+                    )
                     passwordStore.setPassword(pass)
                 }
             }, modifier = Modifier/*.focusRequester(hostFocus)*/) {
                 Text(stringResource(R.string.save))
             }
         }
+    }
+}
+
+/** Whole row is one D-pad target; OK toggles. */
+@Composable
+private fun TlsSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(
+                if (focused) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                else Color.Transparent
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .testTag("tlsSwitch")
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.tls_enabled), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.tls_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
     }
 }

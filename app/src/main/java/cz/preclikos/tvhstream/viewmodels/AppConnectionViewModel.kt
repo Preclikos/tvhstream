@@ -1,5 +1,9 @@
 package cz.preclikos.tvhstream.viewmodels
 
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import cz.preclikos.tvhstream.core.UntrustedCertificateException
+import cz.preclikos.tvhstream.core.CertificateChangedException
 import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -42,8 +46,20 @@ class AppConnectionViewModel(
         val host: String,
         val htspPort: Int,
         val username: String,
-        val password: String
+        val password: String,
+        val tls: Boolean = false,
+        val tlsFingerprint: String = "",
     )
+
+    /**
+     * Shown when the TLS server certificate needs the user's decision: a self-signed
+     * certificate seen for the first time ([previous] == null) or a pinned one that
+     * changed ([previous] = the remembered fingerprint).
+     */
+    data class CertificatePrompt(val host: String, val fingerprint: String, val previous: String?)
+
+    private val _certificatePrompt = MutableStateFlow<CertificatePrompt?>(null)
+    val certificatePrompt: StateFlow<CertificatePrompt?> = _certificatePrompt
 
     @Volatile
     private var lastCfg: ServerCfg? = null
@@ -69,7 +85,9 @@ class AppConnectionViewModel(
                         host = s.host,
                         htspPort = s.htspPort,
                         username = s.username,
-                        password = pwd
+                        password = pwd,
+                        tls = s.tls,
+                        tlsFingerprint = s.tlsFingerprint,
                     )
                 }
                 .distinctUntilChanged()
@@ -186,12 +204,19 @@ class AppConnectionViewModel(
             while (true) {
                 val cfg = lastCfg ?: return@launch
 
-                val ok = connectInternal(
-                    cfg.host,
-                    cfg.htspPort,
-                    cfg.username,
-                    cfg.password
-                )
+                val ok = try {
+                    connectInternal(cfg)
+                } catch (e: UntrustedCertificateException) {
+                    // Self-signed (or otherwise untrusted) certificate: ask the user to
+                    // compare and remember the fingerprint. Retrying won't help until then.
+                    _certificatePrompt.value = CertificatePrompt(cfg.host, e.fingerprint, previous = null)
+                    statusService.set(StatusSlot.CONNECTION, UiText.Res(R.string.tls_waiting_for_trust))
+                    return@launch
+                } catch (e: CertificateChangedException) {
+                    _certificatePrompt.value = CertificatePrompt(cfg.host, e.fingerprint, previous = e.pinned)
+                    statusService.set(StatusSlot.CONNECTION, UiText.Res(R.string.tls_certificate_changed))
+                    return@launch
+                }
                 if (ok) return@launch
 
                 statusService.set(StatusSlot.CONNECTION, UiText.Plain("Reconnect in 5s…"))
@@ -202,22 +227,22 @@ class AppConnectionViewModel(
 
     fun reconnectNow() = startOrRestartReconnectLoop()
 
-    fun connectOnceFromUi(
-        host: String,
-        htspPort: Int,
-        username: String,
-        password: String
-    ) {
-        lastCfg = ServerCfg(host, htspPort, username, password)
-        startOrRestartReconnectLoop()
+    /** User confirmed the certificate: pin it; the settings change triggers a reconnect. */
+    fun trustCertificate(prompt: CertificatePrompt) {
+        _certificatePrompt.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            settings.saveTlsFingerprint(prompt.fingerprint)
+        }
     }
 
-    private suspend fun connectInternal(
-        host: String,
-        port: Int,
-        username: String,
-        password: String
-    ): Boolean {
+    fun rejectCertificate() {
+        _certificatePrompt.value = null
+        statusService.set(StatusSlot.CONNECTION, UiText.Res(R.string.tls_not_trusted))
+    }
+
+    private suspend fun connectInternal(cfg: ServerCfg): Boolean {
+        val host = cfg.host
+        val port = cfg.htspPort
         return try {
             statusService.set(StatusSlot.SYNC, null)
             statusService.set(StatusSlot.EPG, null)
@@ -228,8 +253,10 @@ class AppConnectionViewModel(
             htsp.connect(
                 host = host,
                 port = port,
-                username = username,
-                password = password,
+                username = cfg.username,
+                password = cfg.password,
+                tls = cfg.tls,
+                tlsFingerprint = cfg.tlsFingerprint.takeIf { it.isNotBlank() },
                 forceReconnect = true,
                 connectTimeoutMs = 10_000,
                 responseTimeoutMs = 5_000
@@ -243,6 +270,10 @@ class AppConnectionViewModel(
             repo.startEpgWorker()
 
             true
+        } catch (e: UntrustedCertificateException) {
+            throw e
+        } catch (e: CertificateChangedException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Connect failed")
             statusService.set(

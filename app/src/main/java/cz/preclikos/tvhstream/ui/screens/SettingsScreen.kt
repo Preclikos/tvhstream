@@ -42,9 +42,9 @@ fun SettingsScreen() {
     BackHandler {
         when (currentRoute) {
             Routes.CHANNELS, Routes.EPG -> {
-                // Let the activity finish normally; AppConnectionViewModel.onCleared
-                // tears down the HTSP connection and EPG worker.
-                activity?.finish()
+                // Close every activity in the task (not exitProcess, which skipped the
+                // lifecycle); AppConnectionViewModel.onCleared tears down HTSP + EPG.
+                activity?.finishAffinity()
             }
 
             Routes.SETTINGS -> {

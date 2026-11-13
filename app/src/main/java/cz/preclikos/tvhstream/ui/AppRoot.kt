@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.ui
 
+import cz.preclikos.tvhstream.ui.components.CertificateTrustDialog
 import androidx.compose.foundation.layout.padding
 import android.app.Activity
 import androidx.activity.compose.BackHandler
@@ -62,9 +63,9 @@ fun AppRoot() {
     BackHandler {
         when (currentRoute) {
             Routes.CHANNELS, Routes.EPG -> {
-                // Let the activity finish normally; AppConnectionViewModel.onCleared
-                // tears down the HTSP connection and EPG worker.
-                activity?.finish()
+                // Close every activity in the task (not exitProcess, which skipped the
+                // lifecycle); AppConnectionViewModel.onCleared tears down HTSP + EPG.
+                activity?.finishAffinity()
             }
 
             Routes.SETTINGS -> {
@@ -74,6 +75,17 @@ fun AppRoot() {
             else -> nav.popBackStack()
         }
     }
+    val certPrompt by appVm.certificatePrompt.collectAsState()
+    certPrompt?.let { prompt ->
+        CertificateTrustDialog(
+            host = prompt.host,
+            fingerprint = prompt.fingerprint,
+            previousFingerprint = prompt.previous,
+            onTrust = { appVm.trustCertificate(prompt) },
+            onReject = { appVm.rejectCertificate() },
+        )
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background

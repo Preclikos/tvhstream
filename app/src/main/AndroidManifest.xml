@@ -34,6 +34,7 @@
 
         <activity
             android:name=".ui.MainActivity"
+            android:launchMode="singleTask"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|smallestScreenSize|screenLayout"
             android:exported="true">
             <!-- Connecting a BT keyboard/remote or a display change must not recreate

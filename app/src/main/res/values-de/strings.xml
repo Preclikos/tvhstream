@@ -88,4 +88,18 @@
     <string name="connecting_to_server">Verbindung zum Server…</string>
     <string name="playback_failed">Wiedergabe fehlgeschlagen</string>
     <string name="retry">Erneut versuchen</string>
+    <string name="tls_enabled">Verschlüsselte Verbindung (TLS)</string>
+    <string name="tls_hint">Erfordert Tvheadend mit --htsp_tls_port (Standardport 9983).</string>
+    <string name="tls_fingerprint">Zertifikat-Fingerabdruck (SHA-256)</string>
+    <string name="tls_fingerprint_hint">Wird ausgefüllt, wenn Sie dem Serverzertifikat vertrauen. Leer lassen für ein Zertifikat einer Zertifizierungsstelle.</string>
+    <string name="tls_trust_title">Serverzertifikat prüfen</string>
+    <string name="tls_trust_message">Der Server %1$s verwendet ein Zertifikat, das nicht von einer vertrauenswürdigen Stelle signiert ist (z. B. das selbstsignierte Zertifikat von Tvheadend). Vergleichen Sie den Fingerabdruck mit dem in Tvheadend (Configuration › General › Base).</string>
+    <string name="tls_changed_title">Serverzertifikat hat sich geändert!</string>
+    <string name="tls_changed_message">Der Server %1$s legt jetzt ein anderes Zertifikat vor als das, dem Sie zuvor vertraut haben. Wenn Sie es in Tvheadend nicht geändert haben, wird die Verbindung möglicherweise abgehört. Vertrauen Sie ihm nur, wenn der Fingerabdruck mit Tvheadend übereinstimmt.</string>
+    <string name="tls_previous">Bisher: %1$s</string>
+    <string name="tls_trust">Vertrauen und merken</string>
+    <string name="tls_reject">Nicht verbinden</string>
+    <string name="tls_waiting_for_trust">Warte auf Bestätigung des Serverzertifikats</string>
+    <string name="tls_certificate_changed">Serverzertifikat hat sich geändert</string>
+    <string name="tls_not_trusted">Zertifikat nicht vertraut – nicht verbunden</string>
 </resources>

@@ -1,5 +1,6 @@
 package cz.preclikos.tvhstream.htsp
 
+import cz.preclikos.tvhstream.core.HtspTls
 import cz.preclikos.tvhstream.BuildConfig
 import cz.preclikos.tvhstream.core.ConnectionPolicy
 import kotlinx.coroutines.CancellationException
@@ -120,7 +121,12 @@ class HtspService(
 
         socketBufferBytes: Int = 64 * 1024,
 
-        forceReconnect: Boolean = false
+        forceReconnect: Boolean = false,
+
+        /** Use the encrypted HTSP port (TLS 1.2+). */
+        tls: Boolean = false,
+        /** Pinned SHA-256 fingerprint for a self-signed certificate; null = CA + host name. */
+        tlsFingerprint: String? = null,
     ) {
         connectMutex.withLock {
             if (!forceReconnect && isConnectedUnsafe()) return
@@ -129,12 +135,23 @@ class HtspService(
 
             disconnectInternal(CancellationException("Reconnect"))
 
-            val s = Socket()
+            val plain = Socket()
             try {
-                s.tcpNoDelay = true
-                s.keepAlive = true
+                plain.tcpNoDelay = true
+                plain.keepAlive = true
+                plain.soTimeout = connectTimeoutMs
+                plain.connect(InetSocketAddress(host, port), connectTimeoutMs)
+
+                // Same HTSP protocol, inside a TLS tunnel when enabled.
+                val s: Socket = if (tls) {
+                    try {
+                        HtspTls.wrap(plain, host, port, tlsFingerprint)
+                    } catch (t: Throwable) {
+                        runCatching { plain.close() }
+                        throw t
+                    }
+                } else plain
                 s.soTimeout = soTimeoutMs
-                s.connect(InetSocketAddress(host, port), connectTimeoutMs)
 
                 val inp = BufferedInputStream(s.getInputStream(), socketBufferBytes)
                 val out = BufferedOutputStream(s.getOutputStream(), socketBufferBytes)
@@ -162,7 +179,9 @@ class HtspService(
                     ),
                     timeoutMs = responseTimeoutMs,
                     flush = true,
-                    disconnectOnTimeout = true
+                    // We hold connectMutex here and failAll() needs it too (Mutex is not
+                    // reentrant -> permanent deadlock). The catch below cleans up instead.
+                    disconnectOnTimeout = false
                 )
 
                 challenge = hello.bin("challenge")
@@ -179,7 +198,7 @@ class HtspService(
                         fields = mapOf("username" to user, "digest" to digest),
                         timeoutMs = responseTimeoutMs,
                         flush = true,
-                        disconnectOnTimeout = true
+                        disconnectOnTimeout = false
                     )
                     if (auth.int("noaccess") == 1) {
                         throw IllegalStateException("HTSP authentication failed (noaccess=1)")
@@ -347,9 +366,12 @@ class HtspService(
                 }
             }
         } catch (t: NoSuchElementException) {
+            if (!currentCoroutineContext().isActive) return
             failAll(EOFException("Broken/EOF HTSP stream").apply { initCause(t) })
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
+            // Socket closed by disconnect/failAll while cancelling us: just stop.
+            if (!currentCoroutineContext().isActive) return
             failAll(t)
         }
     }
@@ -375,20 +397,7 @@ class HtspService(
         pending.drainEach { it.def.completeExceptionally(t) }
     }
 
-    private suspend fun disconnectInternal(t: Throwable) {
-        failPending(t)
-
-        initialSyncDef?.completeExceptionally(t)
-        initialSyncDef = null
-
-        val job = readerJob
-        readerJob = null
-        job?.cancel()
-        val self = currentCoroutineContext()[Job]
-        if (job != null && job !== self) {
-            job.join()
-        }
-
+    private fun closeStreams() {
         try {
             socket?.close()
         } catch (_: Throwable) {
@@ -401,6 +410,25 @@ class HtspService(
             output?.close()
         } catch (_: Throwable) {
         }
+    }
+
+    private suspend fun disconnectInternal(t: Throwable) {
+        failPending(t)
+
+        initialSyncDef?.completeExceptionally(t)
+        initialSyncDef = null
+
+        val job = readerJob
+        readerJob = null
+        job?.cancel()
+        // Close before joining: the reader is blocked in a socket read that coroutine
+        // cancellation can't interrupt, so joining first waited for soTimeout (60 s).
+        closeStreams()
+        val self = currentCoroutineContext()[Job]
+        if (job != null && job !== self) {
+            job.join()
+        }
+
 
         input = null
         output = null
@@ -412,6 +440,9 @@ class HtspService(
     }
 
     private suspend fun failAll(t: Throwable) {
+        // Fail waiting requests right away, without the lock: if connect() is in progress
+        // (holding connectMutex) its hello/authenticate fails now instead of timing out.
+        failPending(t)
         connectMutex.withLock {
             _state.value = ConnectionState.Error(t)
             controlEventStream.emit(HtspEvent.ConnectionError(t))
@@ -424,6 +455,7 @@ class HtspService(
             val job = readerJob
             readerJob = null
             job?.cancel()
+            closeStreams()
 
             val self = currentCoroutineContext()[Job]
             if (job != null && job !== self) {
@@ -433,18 +465,6 @@ class HtspService(
                 }
             }
 
-            try {
-                socket?.close()
-            } catch (_: Throwable) {
-            }
-            try {
-                input?.close()
-            } catch (_: Throwable) {
-            }
-            try {
-                output?.close()
-            } catch (_: Throwable) {
-            }
 
             input = null
             output = null

@@ -100,4 +100,18 @@
     <string name="connecting_to_server">Připojování k serveru…</string>
     <string name="playback_failed">Přehrávání selhalo</string>
     <string name="retry">Zkusit znovu</string>
+    <string name="tls_enabled">Šifrované spojení (TLS)</string>
+    <string name="tls_hint">Vyžaduje Tvheadend spuštěný s --htsp_tls_port (výchozí port 9983).</string>
+    <string name="tls_fingerprint">Otisk certifikátu (SHA-256)</string>
+    <string name="tls_fingerprint_hint">Vyplní se po potvrzení certifikátu serveru. Nechte prázdné pro certifikát od certifikační autority.</string>
+    <string name="tls_trust_title">Ověřte certifikát serveru</string>
+    <string name="tls_trust_message">Server %1$s používá certifikát, který není podepsaný důvěryhodnou autoritou (např. vlastní certifikát vygenerovaný Tvheadendem). Porovnejte otisk s tím v Tvheadendu (Configuration › General › Base).</string>
+    <string name="tls_changed_title">Certifikát serveru se změnil!</string>
+    <string name="tls_changed_message">Server %1$s teď předkládá jiný certifikát, než který jste dříve potvrdili. Pokud jste ho v Tvheadendu neměnili, může spojení někdo odposlouchávat. Důvěřujte mu jen tehdy, když otisk odpovídá Tvheadendu.</string>
+    <string name="tls_previous">Dříve: %1$s</string>
+    <string name="tls_trust">Důvěřovat a zapamatovat</string>
+    <string name="tls_reject">Nepřipojovat</string>
+    <string name="tls_waiting_for_trust">Čeká se na potvrzení certifikátu serveru</string>
+    <string name="tls_certificate_changed">Certifikát serveru se změnil</string>
+    <string name="tls_not_trusted">Certifikát nebyl potvrzen – nepřipojeno</string>
 </resources>
