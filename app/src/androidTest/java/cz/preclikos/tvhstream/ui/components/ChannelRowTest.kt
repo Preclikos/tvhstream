@@ -30,6 +30,7 @@ class ChannelRowTest {
                     name = "ČT1 HD",
                     programTitle = "Večerní zprávy",
                     progress = 0.5f,
+                    programStart = "20:00",
                     imageLoader = ImageLoader(LocalContext.current),
                     piconPath = null,
                     focused = false,
@@ -39,8 +40,9 @@ class ChannelRowTest {
             }
         }
 
-        composeTestRule.onNodeWithText("ČT1 HD").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Večerní zprávy").assertIsDisplayed()
+        // Number inline with the name; programme line as "start • title".
+        composeTestRule.onNodeWithText("3  ČT1 HD", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("20:00 • Večerní zprávy", substring = true).assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("row").performClick()
         assertTrue(confirmed)

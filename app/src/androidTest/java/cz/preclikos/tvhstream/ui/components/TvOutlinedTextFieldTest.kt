@@ -60,9 +60,14 @@ class TvOutlinedTextFieldTest {
         composeTestRule.onNodeWithTag("field").requestFocus()
         composeTestRule.onNodeWithTag("state").assertTextEquals("editing=none")
 
-        // Pressing OK / center enters editing (only now would the keyboard show).
+        // OK opens the field on release, not on press: Gboard for TV would otherwise take
+        // the release as "Next" and jump to the next field.
         composeTestRule.onNodeWithTag("field").performKeyInput {
-            pressKey(Key.DirectionCenter)
+            keyDown(Key.DirectionCenter)
+        }
+        composeTestRule.onNodeWithTag("state").assertTextEquals("editing=none")
+        composeTestRule.onNodeWithTag("field").performKeyInput {
+            keyUp(Key.DirectionCenter)
         }
         composeTestRule.onNodeWithTag("state").assertTextEquals("editing=host")
 

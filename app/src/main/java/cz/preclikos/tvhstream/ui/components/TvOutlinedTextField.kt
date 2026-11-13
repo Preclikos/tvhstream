@@ -45,6 +45,9 @@ fun TvOutlinedTextField(
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val okRelease = remember { OpenOnOkRelease() }
+
+    EndEditWhenKeyboardHides(isEditing) { setEditingId(null) }
 
     LaunchedEffect(isEditing) {
         if (isEditing) {
@@ -70,14 +73,9 @@ fun TvOutlinedTextField(
                 if (!state.isFocused && isEditing) setEditingId(null)
             }
             .onPreviewKeyEvent { ev ->
+                if (okRelease.onKey(ev, isEditing) { setEditingId(id) }) return@onPreviewKeyEvent true
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (ev.key) {
-                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
-                        if (!isEditing) {
-                            setEditingId(id)
-                            true
-                        } else false
-                    }
 
                     Key.Back -> {
                         if (isEditing) {

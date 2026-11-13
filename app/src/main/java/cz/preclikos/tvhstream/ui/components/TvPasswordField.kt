@@ -46,6 +46,7 @@ fun TvPasswordField(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val okRelease = remember { OpenOnOkRelease() }
 
     val textFocus = remember { FocusRequester() }
     val eyeFocus = remember { FocusRequester() }
@@ -53,6 +54,8 @@ fun TvPasswordField(
     var passwordVisible by remember { mutableStateOf(false) }
 
     val isEditing = editingId == id
+
+    EndEditWhenKeyboardHides(isEditing) { setEditingId(null) }
 
     LaunchedEffect(isEditing) {
         if (isEditing) {
@@ -88,15 +91,10 @@ fun TvPasswordField(
                 if (!state.isFocused && isEditing) setEditingId(null)
             }
             .onPreviewKeyEvent { ev ->
+                if (okRelease.onKey(ev, isEditing) { setEditingId(id) }) return@onPreviewKeyEvent true
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
 
                 when (ev.key) {
-                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
-                        if (!isEditing) {
-                            setEditingId(id)
-                            true
-                        } else false
-                    }
 
                     Key.Back -> {
                         if (isEditing) {
