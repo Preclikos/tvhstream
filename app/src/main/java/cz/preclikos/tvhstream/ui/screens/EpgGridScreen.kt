@@ -3,6 +3,7 @@ package cz.preclikos.tvhstream.ui.screens
 import cz.preclikos.tvhstream.ui.components.EmptyChannelsPane
 import cz.preclikos.tvhstream.htsp.HtspService
 import cz.preclikos.tvhstream.core.ChannelsEmptyState
+import cz.preclikos.tvhstream.core.EpgViewport
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,8 +31,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +48,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -54,7 +63,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -91,11 +103,14 @@ fun EpgGridScreen(
     val emptyState = ChannelsEmptyState.resolve(channels.isNotEmpty(), connection)
 
     
+    // Minute resolution is enough for the grid (3.2 dp/min); ticking every few seconds
+    // used to recompose every visible row each time.
     var nowSec by remember { mutableLongStateOf(System.currentTimeMillis() / 1000L) }
     LaunchedEffect(Unit) {
         while (true) {
-            nowSec = System.currentTimeMillis() / 1000L
-            delay(5_000)
+            val nowMs = System.currentTimeMillis()
+            nowSec = nowMs / 1000L
+            delay(60_000L - nowMs % 60_000L)
         }
     }
 
@@ -127,6 +142,17 @@ fun EpgGridScreen(
     val stepPx = remember(dpPerMin, scrollStepMinutes) {
         with(density) { (dpPerMin * scrollStepMinutes).toPx() }
     }
+    val pxPerSec = remember(dpPerMin, density) { with(density) { dpPerMin.toPx() } / 60f }
+
+    // Shared by all rows: the timeline viewport width (measured once) and the scroll
+    // position quantized to scroll steps, so rows only re-cull programmes when the
+    // viewport crosses a step boundary instead of on every scroll frame.
+    val timelineViewportPx = remember { mutableIntStateOf(0) }
+    val scrollBucket = remember(stepPx) { derivedStateOf { EpgViewport.bucket(hScroll.value, stepPx) } }
+
+    // Where the timeline starts inside a row: row padding + channel column + spacer.
+    val timelineLeft = RowHorizontalPadding + channelColWidth + ChannelTimelineGap
+    val nowLineColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
 
     
     val listState = rememberLazyListState()
@@ -219,6 +245,24 @@ fun EpgGridScreen(
                 contentPadding = PaddingValues(vertical = 8.dp),
                 modifier = Modifier
                     .fillMaxSize()
+                    // One continuous now-line over all rows, positioned in the draw
+                    // phase from the scroll value: no per-row Box, no recomposition.
+                    .drawWithContent {
+                        drawContent()
+                        val nowX = EpgViewport.nowLineXPx(
+                            nowSec, windowStartSec, windowEndSec, pxPerSec
+                        ) ?: return@drawWithContent
+                        val left = timelineLeft.toPx()
+                        val right = size.width - RowHorizontalPadding.toPx()
+                        val x = left + nowX - hScroll.value
+                        if (x < left || x > right) return@drawWithContent
+                        val w = NowLineWidth.toPx()
+                        drawRect(
+                            color = nowLineColor,
+                            topLeft = Offset(x - w / 2f, 0f),
+                            size = Size(w, size.height)
+                        )
+                    }
                     .focusGroup()
                     .focusRestorer()
             ) {
@@ -241,6 +285,9 @@ fun EpgGridScreen(
                         rowHeight = rowHeight,
                         hScroll = hScroll,
                         stepPx = stepPx,
+                        pxPerSec = pxPerSec,
+                        scrollBucket = scrollBucket,
+                        timelineViewportPx = timelineViewportPx,
                         scope = scope,
                         onSelect = {
                             if (!isRestoring) selection.setSelected(ch.id)
@@ -318,6 +365,9 @@ private fun EpgGridRow(
     rowHeight: Dp,
     hScroll: androidx.compose.foundation.ScrollState,
     stepPx: Float,
+    pxPerSec: Float,
+    scrollBucket: State<Int>,
+    timelineViewportPx: MutableIntState,
     scope: kotlinx.coroutines.CoroutineScope,
     onSelect: () -> Unit,
     onPlay: () -> Unit
@@ -335,7 +385,7 @@ private fun EpgGridRow(
         modifier
             .fillMaxWidth()
             .height(rowHeight)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = RowHorizontalPadding, vertical = 6.dp)
             .clip(shape)
             .background(bg)
             .onFocusChanged {
@@ -386,7 +436,7 @@ private fun EpgGridRow(
             width = channelColWidth
         )
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(ChannelTimelineGap))
 
         
         TimelineVisual(
@@ -396,7 +446,11 @@ private fun EpgGridRow(
             windowEndSec = windowEndSec,
             dpPerMin = dpPerMin,
             rowHeight = rowHeight,
-            hScroll = hScroll
+            hScroll = hScroll,
+            pxPerSec = pxPerSec,
+            stepPx = stepPx,
+            scrollBucket = scrollBucket,
+            timelineViewportPx = timelineViewportPx,
         )
     }
 }
@@ -433,6 +487,17 @@ private fun ChannelNameCell(
     }
 }
 
+private val RowHorizontalPadding = 10.dp
+private val ChannelTimelineGap = 8.dp
+private val NowLineWidth = 2.dp
+private const val SlotMinutes = 30
+
+/** Keep at least this much of a programme cell for its title when it sticks to the edge. */
+private val MinStickyTitleWidth = 80.dp
+
+/** Programme cell outer padding + inner text padding (see the cell modifiers below). */
+private val CellTitleInset = 2.dp + 10.dp
+
 @Composable
 private fun TimelineVisual(
     epg: List<EpgEventEntry>,
@@ -441,92 +506,142 @@ private fun TimelineVisual(
     windowEndSec: Long,
     dpPerMin: Dp,
     rowHeight: Dp,
-    hScroll: androidx.compose.foundation.ScrollState
+    hScroll: androidx.compose.foundation.ScrollState,
+    pxPerSec: Float,
+    stepPx: Float,
+    scrollBucket: State<Int>,
+    timelineViewportPx: MutableIntState,
 ) {
     val totalMin = ((windowEndSec - windowStartSec) / 60L).toInt()
     val totalWidth = dpPerMin * totalMin
+    val gridColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
+    val density = LocalDensity.current
+    val slotPx = remember(dpPerMin, density) { with(density) { (dpPerMin * SlotMinutes).toPx() } }
+    val fallbackViewportPx = LocalWindowInfo.current.containerSize.width
 
     Box(
         Modifier
             .fillMaxHeight()
-
+            .onSizeChanged {
+                if (it.width > 0 && timelineViewportPx.intValue != it.width) {
+                    timelineViewportPx.intValue = it.width
+                }
+            }
             .horizontalScroll(hScroll)
     ) {
-        
-        Row(Modifier.width(totalWidth)) {
-            val slotMin = 30
-            val slots = totalMin / slotMin
-            repeat(slots) {
-                Box(
-                    Modifier
-                        .width(dpPerMin * slotMin)
-                        .fillMaxHeight()
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
-                        )
-                )
-            }
-        }
+        // Slot grid: one draw call instead of ~48 bordered Boxes per row.
+        Box(
+            Modifier
+                .width(totalWidth)
+                .fillMaxHeight()
+                .drawBehind {
+                    val stroke = 1.dp.toPx()
+                    drawRect(gridColor, Offset.Zero, Size(size.width, stroke))
+                    drawRect(gridColor, Offset(0f, size.height - stroke), Size(size.width, stroke))
+                    var x = 0f
+                    while (x <= size.width) {
+                        drawRect(gridColor, Offset(x, 0f), Size(stroke, size.height))
+                        x += slotPx
+                    }
+                }
+        )
 
-        
-        if (nowSec in windowStartSec..windowEndSec) {
-            val offsetMin = ((nowSec - windowStartSec) / 60f).coerceIn(0f, totalMin.toFloat())
-            val x = dpPerMin * offsetMin
-            Box(
-                Modifier
-                    .offset(x = x, y = 0.dp)
-                    .width(2.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+        // Only compose programmes overlapping the (quantized) visible window.
+        val bucket = scrollBucket.value
+        val viewportPx = timelineViewportPx.intValue.takeIf { it > 0 } ?: fallbackViewportPx
+        val visible = remember(epg, windowStartSec, windowEndSec, bucket, viewportPx, pxPerSec, stepPx) {
+            EpgViewport.eventsInRange(
+                epg = epg,
+                windowStartSec = windowStartSec,
+                windowEndSec = windowEndSec,
+                pxPerSec = pxPerSec,
+                rangePx = EpgViewport.composeRangePx(bucket, stepPx, viewportPx),
             )
         }
 
-        
-        val visible = remember(epg, windowStartSec, windowEndSec) {
-            epg.asSequence()
-                .filter { it.stop > windowStartSec && it.start < windowEndSec }
-                .sortedBy { it.start }
-                .toList()
-        }
-
         visible.forEach { e ->
-            val startSec = max(e.start, windowStartSec)
-            val stopSec = min(e.stop, windowEndSec)
-
-            val startMin = (startSec - windowStartSec) / 60f
-            val durMin = max(1f, (stopSec - startSec) / 60f)
-
-            val x = dpPerMin * startMin
-            val w = (dpPerMin * durMin).coerceAtLeast(28.dp)
-
-            val isNow = e.start <= nowSec && nowSec < e.stop
-            val bg = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
-            else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.10f)
-
-            val border = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-            else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.18f)
-
-            Box(
-                Modifier
-                    .offset(x = x, y = 0.dp)
-                    .padding(horizontal = 2.dp, vertical = 6.dp)
-                    .height(rowHeight - 12.dp)
-                    .width(w)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(bg)
-                    .border(1.dp, border, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Text(
-                    text = e.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            key(e.eventId) {
+                ProgrammeCell(
+                    e = e,
+                    nowSec = nowSec,
+                    windowStartSec = windowStartSec,
+                    windowEndSec = windowEndSec,
+                    dpPerMin = dpPerMin,
+                    rowHeight = rowHeight,
+                    hScroll = hScroll,
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ProgrammeCell(
+    e: EpgEventEntry,
+    nowSec: Long,
+    windowStartSec: Long,
+    windowEndSec: Long,
+    dpPerMin: Dp,
+    rowHeight: Dp,
+    hScroll: androidx.compose.foundation.ScrollState,
+) {
+    val startSec = max(e.start, windowStartSec)
+    val stopSec = min(e.stop, windowEndSec)
+
+    val startMin = (startSec - windowStartSec) / 60f
+    val durMin = max(1f, (stopSec - startSec) / 60f)
+
+    val x = dpPerMin * startMin
+    val w = (dpPerMin * durMin).coerceAtLeast(28.dp)
+
+    val isNow = e.start <= nowSec && nowSec < e.stop
+    val bg = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.10f)
+
+    val border = if (isNow) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+    else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.18f)
+
+    Box(
+        Modifier
+            .layout { measurable, constraints ->
+                // Position in the layout phase (Dp offset modifier equivalent).
+                val placeable = measurable.measure(constraints)
+                layout(placeable.width, placeable.height) {
+                    placeable.placeRelative(x.roundToPx(), 0)
+                }
+            }
+            .padding(horizontal = 2.dp, vertical = 6.dp)
+            .height(rowHeight - 12.dp)
+            .width(w)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(1.dp, border, RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(
+            text = e.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // Sticky title: once the programme's start scrolls past the left edge, keep
+            // the title at the edge. Reads the scroll value in the layout phase only, so
+            // scrolling relayouts the text without recomposing the grid.
+            modifier = Modifier.layout { measurable, constraints ->
+                val offset = EpgViewport.stickyTitleOffsetPx(
+                    scrollPx = hScroll.value,
+                    titleStartPx = (x + CellTitleInset).roundToPx(),
+                    titleWidthPx = constraints.maxWidth,
+                    minTitlePx = MinStickyTitleWidth.roundToPx(),
+                )
+                val placeable = measurable.measure(
+                    constraints.copy(minWidth = 0, maxWidth = (constraints.maxWidth - offset).coerceAtLeast(0))
+                )
+                layout(constraints.maxWidth, placeable.height) {
+                    placeable.placeRelative(offset, 0)
+                }
+            }
+        )
     }
 }
