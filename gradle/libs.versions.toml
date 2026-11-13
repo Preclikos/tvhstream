@@ -1,26 +1,26 @@
 [versions]
-activityCompose = "1.12.4"
-agp = "8.13.2"
-coil = "3.3.0"
-composeBom = "2026.02.00"
-datastorePreferences = "1.2.0"
-firebaseBom = "34.9.0"
-koin = "4.1.1"
-kotlin = "2.3.10"
-coreKtx = "1.17.0"
-appcompat = "1.7.1"
-kotlinxCoroutines = "1.10.2"
-lifecycle = "2.10.0"
-material = "1.13.0"
-media3 = "1.9.2"
-navigationCompose = "2.9.7"
+activityCompose = "1.13.0"
+agp = "9.5.1"
+coil = "3.6.3"
+composeBom = "2026.09.00"
+datastorePreferences = "1.3.0"
+firebaseBom = "35.2.0"
+koin = "4.2.2"
+kotlin = "2.4.21"
+coreKtx = "1.19.1"
+appcompat = "1.8.0"
+kotlinxCoroutines = "1.11.0"
+lifecycle = "2.11.0"
+material = "1.14.0"
+media3 = "1.11.1"
+navigationCompose = "2.10.2"
 securityCrypto = "1.1.0"
 timber = "5.0.1"
-google-services = "4.4.4"
-firebase = "3.0.6"
+google-services = "4.6.0"
+firebase = "3.0.8"
 junit = "4.13.2"
-androidxTestExt = "1.2.1"
-espresso = "3.6.1"
+androidxTestExt = "1.3.0"
+espresso = "3.7.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -62,7 +62,6 @@ androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-mani
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }
 google-firebase = { id = "com.google.firebase.crashlytics", version.ref = "firebase" }

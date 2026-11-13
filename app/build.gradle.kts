@@ -2,7 +2,6 @@ import org.gradle.kotlin.dsl.implementation
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.google.services)
     alias(libs.plugins.google.firebase)
@@ -14,12 +13,12 @@ kotlin {
 
 android {
     namespace = "cz.preclikos.tvhstream"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "cz.preclikos.tvhstream"
         minSdk = 28
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "Development"
 
