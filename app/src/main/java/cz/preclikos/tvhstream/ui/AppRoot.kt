@@ -2,6 +2,7 @@ package cz.preclikos.tvhstream.ui
 
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.Key
@@ -74,7 +75,7 @@ fun AppRoot() {
 
     val isPlayer = currentRoute?.startsWith(Routes.PLAYER) == true
 
-    BackHandler {
+    fun goBack() {
         when (currentRoute) {
             Routes.CHANNELS, Routes.EPG -> {
                 // Close every activity in the task (not exitProcess, which skipped the
@@ -82,13 +83,27 @@ fun AppRoot() {
                 activity?.finishAffinity()
             }
 
-            Routes.SETTINGS -> {
-                nav.navigate(Routes.CHANNELS) { launchSingleTop = true }
+            Routes.SETTINGS, Routes.RECORDINGS -> {
+                // Back to the existing Channels entry instead of stacking a new one.
+                if (!nav.popBackStack(Routes.CHANNELS, inclusive = false)) {
+                    nav.navigate(Routes.CHANNELS) { launchSingleTop = true }
+                }
             }
 
             else -> nav.popBackStack()
         }
     }
+
+    BackHandler { goBack() }
+
+    // Back pressed (KeyDown) while a home screen was showing. The player closes itself
+    // on KeyDown, so its KeyUp arrives on Channels: exiting on that KeyUp quit the app.
+    val backDownOnHome = remember { BooleanArray(1) }
+
+    // Back KeyDown that reached the root unconsumed on Settings/Recordings (a text field
+    // being edited consumes it first, so its KeyUp must not navigate).
+    val backDownOnPage = remember { BooleanArray(1) }
+
     val certPrompt by appVm.certificatePrompt.collectAsState()
     certPrompt?.let { prompt ->
         CertificateTrustDialog(
@@ -108,11 +123,46 @@ fun AppRoot() {
             // so exiting took two presses. On the home screens, handle Back here first.
             .onPreviewKeyEvent { event ->
                 if (event.key != Key.Back) return@onPreviewKeyEvent false
-                if (currentRoute != Routes.CHANNELS && currentRoute != Routes.EPG) {
-                    return@onPreviewKeyEvent false
+                val onHome = currentRoute == Routes.CHANNELS || currentRoute == Routes.EPG
+                when (event.type) {
+                    KeyEventType.KeyDown -> {
+                        backDownOnHome[0] = onHome
+                        onHome
+                    }
+
+                    KeyEventType.KeyUp -> {
+                        val exit = backDownOnHome[0] && onHome
+                        backDownOnHome[0] = false
+                        if (exit) activity?.finishAffinity()
+                        // Also swallow the KeyUp of a Back that started elsewhere (e.g. closed
+                        // the player): unconsumed, it would reach BackHandler and exit too.
+                        onHome
+                    }
+
+                    else -> onHome
                 }
-                if (event.type == KeyEventType.KeyUp) activity?.finishAffinity()
-                true
+            }
+            // Settings and Recordings: nested focus groups made Compose's focus-exit eat
+            // each Back (3 presses to leave Settings). Bubbling (not preview) so a text
+            // field in edit mode still gets Back first; this runs before the focus-exit.
+            .onKeyEvent { event ->
+                if (event.key != Key.Back) return@onKeyEvent false
+                val onPage = currentRoute == Routes.SETTINGS || currentRoute == Routes.RECORDINGS
+                when (event.type) {
+                    KeyEventType.KeyDown -> {
+                        backDownOnPage[0] = onPage
+                        onPage
+                    }
+
+                    KeyEventType.KeyUp -> {
+                        val handled = backDownOnPage[0] && onPage
+                        backDownOnPage[0] = false
+                        if (handled) goBack()
+                        handled
+                    }
+
+                    else -> false
+                }
             },
         color = MaterialTheme.colorScheme.background
     ) {

@@ -1,7 +1,5 @@
 package cz.preclikos.tvhstream.ui.screens
 
-import android.app.Activity
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -11,12 +9,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import cz.preclikos.tvhstream.ui.Routes
 import cz.preclikos.tvhstream.ui.components.SettingsSubRail
 import cz.preclikos.tvhstream.ui.screens.settings.SettingsConnection
 import cz.preclikos.tvhstream.ui.screens.settings.SettingsLanguage
@@ -32,28 +28,11 @@ object SettingsRoutes {
 @Composable
 fun SettingsScreen() {
     val nav = rememberNavController()
-    val context = LocalContext.current
-    val activity = context as? Activity
 
     val backStackEntry by nav.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val topRoute = currentRoute?.substringBefore("/")
 
-    BackHandler {
-        when (currentRoute) {
-            Routes.CHANNELS, Routes.EPG -> {
-                // Close every activity in the task (not exitProcess, which skipped the
-                // lifecycle); AppConnectionViewModel.onCleared tears down HTSP + EPG.
-                activity?.finishAffinity()
-            }
-
-            Routes.SETTINGS -> {
-                nav.navigate(Routes.CHANNELS) { launchSingleTop = true }
-            }
-
-            else -> nav.popBackStack()
-        }
-    }
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -62,8 +41,9 @@ fun SettingsScreen() {
             SettingsSubRail(
                 currentRoute = topRoute,
                 onNavigate = { route ->
+                    // Sections replace each other; Back leaves Settings (AppRoot handles it).
                     nav.navigate(route) {
-                        popUpTo(Routes.CHANNELS) { inclusive = false }
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true
                     }
