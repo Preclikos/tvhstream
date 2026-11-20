@@ -1,6 +1,7 @@
 package cz.preclikos.tvhstream.settings
 
 import android.content.Context
+import cz.preclikos.tvhstream.core.HtspTls
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -15,7 +16,7 @@ data class ServerSettings(
     val host: String = "",
     val htspPort: Int = 9982,
     val username: String = "",
-    /** Connect to Tvheadend's encrypted HTSP port (--htsp_tls_port). */
+    /** Encrypt the HTSP connection with startTLS (Tvheadend "HTSP Encryption Settings"). */
     val tls: Boolean = false,
     /** Pinned SHA-256 fingerprint of a self-signed server certificate ("" = verify via CA). */
     val tlsFingerprint: String = "",
@@ -34,11 +35,14 @@ class ServerSettingsStore(private val context: Context) {
 
     val serverSettings: Flow<ServerSettings> =
         context.dataStore.data.map { p ->
+            val tls = p[Keys.TLS] ?: false
             ServerSettings(
                 host = p[Keys.HOST] ?: "",
-                htspPort = p[Keys.PORT_HTSP] ?: 9982,
+                // The separate TLS port (9943) is gone: STARTTLS runs on the HTSP port.
+                htspPort = (p[Keys.PORT_HTSP] ?: HtspTls.DEFAULT_PORT)
+                    .let { if (tls && it == HtspTls.LEGACY_TLS_PORT) HtspTls.DEFAULT_PORT else it },
                 username = p[Keys.USER] ?: "",
-                tls = p[Keys.TLS] ?: false,
+                tls = tls,
                 tlsFingerprint = p[Keys.TLS_FINGERPRINT] ?: "",
             )
         }

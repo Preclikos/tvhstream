@@ -142,10 +142,8 @@ fun SettingsConnection(
 
             TlsSwitchRow(
                 checked = tls,
-                onCheckedChange = { enabled ->
-                    tls = enabled
-                    htspPort = HtspTls.portForToggle(htspPort.toIntOrNull(), enabled).toString()
-                },
+                // STARTTLS runs on the normal HTSP port, so the port stays as it is.
+                onCheckedChange = { tls = it },
             )
 
             if (tls) {

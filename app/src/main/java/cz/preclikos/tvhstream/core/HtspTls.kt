@@ -26,16 +26,32 @@ class UntrustedCertificateException(val fingerprint: String, cause: Throwable?) 
 class CertificateChangedException(val fingerprint: String, val pinned: String) :
     SSLException("Server certificate changed (SHA-256 $fingerprint, pinned $pinned)")
 
+/** TLS is on, but the server's hello doesn't offer "starttls" (old Tvheadend or encryption off). */
+class StartTlsNotOfferedException :
+    SSLException("The server does not offer encryption (no starttls capability)")
+
+/** The server answered startTLS with an error (e.g. no usable certificate). */
+class StartTlsRefusedException(val reason: String) :
+    SSLException("startTLS refused by the server: $reason")
+
+/** The server requires encryption ("Require encryption" in Tvheadend) and TLS is off. */
+class TlsRequiredException :
+    java.io.IOException("The server requires an encrypted connection (startTLS)")
+
 /**
- * TLS for the encrypted HTSP port (Tvheadend `--htsp_tls_port`, standard 9943).
+ * TLS for HTSP via STARTTLS: on the normal HTSP port the client sends hello, then
+ * startTLS when the server lists "starttls" in its capabilities, and runs the TLS
+ * handshake on the same connection (see HtspService.connect).
  * Same trust model as Tvheadend's Python client:
  *  - with a pinned SHA-256 fingerprint, accept exactly that certificate (self-signed);
  *  - otherwise verify the chain against the system trust store and the host name.
  * TLS 1.2 or newer only.
  */
 object HtspTls {
-    const val DEFAULT_PLAIN_PORT = 9982
-    const val DEFAULT_TLS_PORT = 9943
+    const val DEFAULT_PORT = 9982
+
+    /** Port of the earlier implicit-TLS server, which no longer exists. */
+    const val LEGACY_TLS_PORT = 9943
 
     private val PROTOCOLS = listOf("TLSv1.3", "TLSv1.2")
 
@@ -52,15 +68,8 @@ object HtspTls {
     fun format(fingerprint: String): String =
         normalize(fingerprint).orEmpty().chunked(2).joinToString(":")
 
-    /** Port to suggest when the TLS switch is toggled (keeps a custom port). */
-    fun portForToggle(currentPort: Int?, tls: Boolean): Int = when {
-        tls && (currentPort == null || currentPort == DEFAULT_PLAIN_PORT) -> DEFAULT_TLS_PORT
-        !tls && (currentPort == null || currentPort == DEFAULT_TLS_PORT) -> DEFAULT_PLAIN_PORT
-        else -> currentPort!!
-    }
-
     /**
-     * Upgrades an already connected [plain] socket to TLS and completes the handshake.
+     * Upgrades an already connected [plain] socket to TLS (after the startTLS reply) and completes the handshake.
      * Throws [UntrustedCertificateException] / [CertificateChangedException] so the UI
      * can offer pinning; other failures surface as [SSLException].
      */

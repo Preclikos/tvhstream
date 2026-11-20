@@ -22,7 +22,7 @@ import kotlin.concurrent.thread
 /**
  * Real TLS handshakes against a local server, using test keystores in
  * src/test/resources/tls (a test CA, a CA-signed "localhost" cert and a self-signed
- * "tvheadend" cert, like the one Tvheadend generates for --htsp_tls_port).
+ * "tvheadend" cert, like the one Tvheadend generates for STARTTLS).
  */
 class HtspTlsTest {
 
@@ -146,12 +146,4 @@ class HtspTlsTest {
         assertEquals("AB:CD:01", HtspTls.format("abcd01"))
     }
 
-    @Test
-    fun portForToggle_switchesOnlyDefaultPorts() {
-        assertEquals(9943, HtspTls.portForToggle(9982, tls = true))
-        assertEquals(9982, HtspTls.portForToggle(9943, tls = false))
-        assertEquals(9943, HtspTls.portForToggle(null, tls = true))
-        assertEquals(12345, HtspTls.portForToggle(12345, tls = true))
-        assertEquals(12345, HtspTls.portForToggle(12345, tls = false))
-    }
 }

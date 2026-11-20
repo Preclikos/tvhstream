@@ -62,6 +62,9 @@ class ConnectionProblemTest {
         assertEquals(ConnectionProblem.TLS_UNTRUSTED, classify(UntrustedCertificateException("AB:CD", null)))
         assertEquals(ConnectionProblem.TLS_CHANGED, classify(CertificateChangedException("AB:CD", "EF:01")))
         assertEquals(ConnectionProblem.TLS_FAILED, classify(SSLHandshakeException("protocol")))
+        assertEquals(ConnectionProblem.TLS_NOT_OFFERED, classify(StartTlsNotOfferedException()))
+        assertEquals(ConnectionProblem.TLS_NOT_OFFERED, classify(StartTlsRefusedException("TLS is not enabled")))
+        assertEquals(ConnectionProblem.TLS_REQUIRED, classify(TlsRequiredException()))
     }
 
     @Test

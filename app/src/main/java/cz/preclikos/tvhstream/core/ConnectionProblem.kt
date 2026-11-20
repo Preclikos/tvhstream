@@ -29,7 +29,13 @@ enum class ConnectionProblem {
     /** The pinned TLS certificate changed. */
     TLS_CHANGED,
 
-    /** Any other TLS failure (plain port, old TLS version, ...). */
+    /** TLS is on, but the server doesn't offer or refused startTLS. */
+    TLS_NOT_OFFERED,
+
+    /** The server requires encryption and TLS is off in the app. */
+    TLS_REQUIRED,
+
+    /** Any other TLS failure (handshake, old TLS version, ...). */
     TLS_FAILED,
 
     /** Anything else. */
@@ -51,6 +57,8 @@ enum class ConnectionProblem {
             return when {
                 has { it is UntrustedCertificateException } -> TLS_UNTRUSTED
                 has { it is CertificateChangedException } -> TLS_CHANGED
+                has { it is StartTlsNotOfferedException || it is StartTlsRefusedException } -> TLS_NOT_OFFERED
+                has { it is TlsRequiredException } -> TLS_REQUIRED
                 has { it is UnknownHostException || it is ConnectException ||
                         it is NoRouteToHostException || it is PortUnreachableException } -> UNREACHABLE
                 has { it is IllegalStateException &&

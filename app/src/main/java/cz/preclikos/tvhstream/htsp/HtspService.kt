@@ -1,6 +1,9 @@
 package cz.preclikos.tvhstream.htsp
 
 import cz.preclikos.tvhstream.core.HtspTls
+import cz.preclikos.tvhstream.core.StartTlsNotOfferedException
+import cz.preclikos.tvhstream.core.StartTlsRefusedException
+import cz.preclikos.tvhstream.core.TlsRequiredException
 import cz.preclikos.tvhstream.BuildConfig
 import cz.preclikos.tvhstream.core.ConnectionPolicy
 import kotlinx.coroutines.CancellationException
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -126,7 +130,7 @@ class HtspService(
 
         forceReconnect: Boolean = false,
 
-        /** Use the encrypted HTSP port (TLS 1.2+). */
+        /** Switch the connection to TLS 1.2+ with startTLS right after hello. */
         tls: Boolean = false,
         /** Pinned SHA-256 fingerprint for a self-signed certificate; null = CA + host name. */
         tlsFingerprint: String? = null,
@@ -145,9 +149,46 @@ class HtspService(
                 plain.soTimeout = connectTimeoutMs
                 plain.connect(InetSocketAddress(host, port), connectTimeoutMs)
 
-                // Same HTSP protocol, inside a TLS tunnel when enabled.
+                val helloFields = mapOf(
+                    "htspversion" to htspVersion,
+                    "clientname" to clientName,
+                    "clientversion" to clientVersion
+                )
+
+                // STARTTLS: hello and startTLS go in plain text on the HTSP port, before the
+                // reader runs (it would consume the handshake bytes). Authentication and
+                // everything after it are inside TLS.
+                var hello: HtspMessage? = null
                 val s: Socket = if (tls) {
                     try {
+                        plain.soTimeout = responseTimeoutMs.toInt()
+                        val pin = BufferedInputStream(plain.getInputStream(), 4096)
+                        val pout = plain.getOutputStream()
+                        // HtspCodec reads ignore SO_TIMEOUT (soft reads), so a server that
+                        // never answers is cut off by closing the socket.
+                        val timedOut = java.util.concurrent.atomic.AtomicBoolean(false)
+                        val watchdog = scope.launch {
+                            delay(responseTimeoutMs * 2)
+                            timedOut.set(true)
+                            runCatching { plain.close() }
+                        }
+                        val h: HtspMessage
+                        try {
+                            h = plainExchange(pin, pout, "hello", helloFields)
+                            val caps = h.list("servercapability").orEmpty()
+                            if (caps.none { it == "starttls" }) throw StartTlsNotOfferedException()
+                            val st = plainExchange(pin, pout, "startTLS", emptyMap())
+                            st.str("error")?.let { throw StartTlsRefusedException(it) }
+                        } catch (t: Throwable) {
+                            if (timedOut.get()) {
+                                throw SocketTimeoutException("HTSP hello/startTLS timed out after ${responseTimeoutMs * 2}ms").apply { initCause(t) }
+                            }
+                            throw t
+                        } finally {
+                            watchdog.cancel()
+                        }
+                        hello = h
+                        // The TLS handshake uses normal (throwing) reads bound by soTimeout.
                         HtspTls.wrap(plain, host, port, tlsFingerprint)
                     } catch (t: Throwable) {
                         runCatching { plain.close() }
@@ -173,13 +214,9 @@ class HtspService(
                     )
                 }
 
-                val hello = request(
+                val helloReply = hello ?: request(
                     method = "hello",
-                    fields = mapOf(
-                        "htspversion" to htspVersion,
-                        "clientname" to clientName,
-                        "clientversion" to clientVersion
-                    ),
+                    fields = helloFields,
                     timeoutMs = responseTimeoutMs,
                     flush = true,
                     // We hold connectMutex here and failAll() needs it too (Mutex is not
@@ -187,8 +224,8 @@ class HtspService(
                     disconnectOnTimeout = false
                 )
 
-                challenge = hello.bin("challenge")
-                val serverMax = hello.int("htspversion") ?: htspVersion
+                challenge = helloReply.bin("challenge")
+                val serverMax = helloReply.int("htspversion") ?: htspVersion
                 negotiatedHtspVersion = min(htspVersion, serverMax)
 
                 val user = username?.trim().orEmpty()
@@ -203,6 +240,7 @@ class HtspService(
                         flush = true,
                         disconnectOnTimeout = false
                     )
+                    if (auth.int("tlsrequired") == 1) throw TlsRequiredException()
                     if (auth.int("noaccess") == 1) {
                         throw IllegalStateException("HTSP authentication failed (noaccess=1)")
                     }
@@ -225,13 +263,14 @@ class HtspService(
         initialSyncDef = def
 
         try {
-            request(
+            val reply = request(
                 method = "enableAsyncMetadata",
                 fields = emptyMap(),
                 timeoutMs = timeoutMs,
                 flush = true,
                 disconnectOnTimeout = true
             )
+            if (reply.int("tlsrequired") == 1) throw TlsRequiredException()
             withTimeout(timeoutMs) { def.await() }
         } finally {
             if (initialSyncDef === def) initialSyncDef = null
@@ -412,6 +451,25 @@ class HtspService(
             // Socket closed by disconnect/failAll while cancelling us: just stop.
             if (!currentCoroutineContext().isActive) return
             failAll(t)
+        }
+    }
+
+    /**
+     * One request/reply on the plain socket before the reader runs (hello, startTLS).
+     * Blocking; the socket's soTimeout bounds the wait.
+     */
+    private fun plainExchange(
+        inp: InputStream,
+        out: OutputStream,
+        method: String,
+        fields: Map<String, Any?>,
+    ): HtspMessage {
+        val s = seq.getAndIncrement()
+        HtspCodec.writeMessage(out, method, fields + ("seq" to s))
+        out.flush()
+        while (true) {
+            val msg = HtspCodec.readMessage(inp)
+            if (msg.seq == s) return msg
         }
     }
 

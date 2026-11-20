@@ -122,6 +122,8 @@ private fun ProblemMessage(ui: ConnectionProblemUi, onOpenSettings: () -> Unit) 
         ConnectionProblem.AUTH_FAILED -> R.string.conn_auth_title to R.string.conn_auth_hint
         ConnectionProblem.TLS_UNTRUSTED -> R.string.conn_tls_untrusted_title to R.string.conn_tls_untrusted_hint
         ConnectionProblem.TLS_CHANGED -> R.string.conn_tls_changed_title to R.string.conn_tls_changed_hint
+        ConnectionProblem.TLS_NOT_OFFERED -> R.string.conn_tls_not_offered_title to R.string.conn_tls_not_offered_hint
+        ConnectionProblem.TLS_REQUIRED -> R.string.conn_tls_required_title to R.string.conn_tls_required_hint
         ConnectionProblem.TLS_FAILED -> R.string.conn_tls_failed_title to R.string.conn_tls_failed_hint
         ConnectionProblem.OTHER -> R.string.conn_other_title to R.string.conn_other_hint
     }
